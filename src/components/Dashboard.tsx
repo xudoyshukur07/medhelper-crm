@@ -11,19 +11,13 @@ function Dashboard() {
   });
 
   useEffect(() => {
-    console.log('Dashboard yuklandi');
-    
-    // Kontaktlar soni
     const contactsQuery = query(collection(db, 'contacts'));
     const unsub1 = onSnapshot(contactsQuery, (snapshot) => {
-      console.log('Kontaktlar soni:', snapshot.size);
       setStats(prev => ({ ...prev, contacts: snapshot.size }));
     });
 
-    // Bemorlar soni
     const patientsQuery = query(collection(db, 'patients'));
     const unsub2 = onSnapshot(patientsQuery, (snapshot) => {
-      console.log('Bemorlar soni:', snapshot.size);
       setStats(prev => ({ ...prev, patients: snapshot.size }));
     });
 
@@ -36,7 +30,6 @@ function Dashboard() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      console.log('Chiqildi');
     } catch (error) {
       console.error('Chiqishda xatolik:', error);
     }

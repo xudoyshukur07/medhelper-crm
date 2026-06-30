@@ -1,194 +1,266 @@
-﻿* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: #f0f2f5;
-}
-
-/* Loading */
-.loading-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  color: #667eea;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-/* Login */
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.login-card {
-  background: white;
-  padding: 40px;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-  width: 100%;
-  max-width: 400px;
-}
-
-.login-card h1 {
-  text-align: center;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.login-card p {
-  text-align: center;
-  color: #666;
-  margin-bottom: 24px;
-}
-
-.login-card form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.login-card input {
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 0.3s;
-}
-
-.login-card input:focus {
-  border-color: #667eea;
-  outline: none;
-}
-
-.login-card button {
-  padding: 12px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.login-card button:hover {
-  background: #5a67d8;
-}
-
-.login-card button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.error {
-  background: #fee;
-  color: #c62828;
-  padding: 10px;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.login-footer {
-  margin-top: 20px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  text-align: center;
-  font-size: 14px;
-}
-
-.login-footer p {
-  color: #666;
-  margin-bottom: 5px;
-}
-
-.login-footer small {
-  color: #999;
-}
-
-/* Dashboard */
-.dashboard {
+﻿/* Mobil moslashuvchanlik */
+.app {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 10px;
 }
 
-.dashboard header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background: white;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+@media (max-width: 768px) {
+  .app {
+    padding: 5px;
+  }
 }
 
-.dashboard header div {
-  display: flex;
-  align-items: center;
-  gap: 15px;
+/* Dashboard mobil */
+.dashboard {
+  padding: 10px !important;
 }
 
-.user-email {
-  color: #666;
-  font-size: 14px;
+@media (max-width: 480px) {
+  .dashboard {
+    padding: 5px !important;
+  }
 }
 
-.logout {
-  background: #e74c3c;
-  color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
+/* Statistika kartochkalari */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 15px;
+  margin-bottom: 20px;
 }
 
-.stat-card {
-  background: white;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  text-align: center;
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .stat-card {
+    padding: 12px !important;
+  }
+  
+  .stat-card h3 {
+    font-size: 12px !important;
+  }
+  
+  .stat-number {
+    font-size: 20px !important;
+  }
 }
 
-.stat-card h3 {
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 8px;
+/* Header mobil */
+.dashboard header {
+  flex-wrap: wrap !important;
+  padding: 12px !important;
 }
 
-.stat-number {
-  font-size: 32px;
-  font-weight: bold;
-  color: #2d3748;
+.dashboard header h1 {
+  font-size: 18px !important;
 }
 
-.welcome {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 30px;
-  border-radius: 12px;
-  margin-top: 20px;
-  text-align: center;
+.dashboard header div {
+  flex-wrap: wrap !important;
 }
 
-.welcome h2 {
-  margin-bottom: 10px;
+.user-email {
+  font-size: 12px !important;
+}
+
+/* Tabs mobil */
+.tabs {
+  flex-wrap: wrap !important;
+  padding: 8px !important;
+  gap: 4px !important;
+}
+
+.tabs button {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+  flex: 1 1 auto !important;
+  min-width: 60px !important;
+}
+
+@media (max-width: 480px) {
+  .tabs button {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    min-width: 45px !important;
+  }
+}
+
+/* Login mobil */
+.login-card {
+  padding: 24px !important;
+  margin: 10px !important;
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 16px !important;
+  }
+  
+  .login-card h1 {
+    font-size: 20px !important;
+  }
+}
+
+/* Modal mobil */
+.modal-overlay {
+  padding: 10px !important;
+}
+
+.modal-content {
+  width: 95% !important;
+  max-width: 500px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  padding: 16px !important;
+}
+
+@media (max-width: 480px) {
+  .modal-content {
+    padding: 12px !important;
+    border-radius: 10px !important;
+  }
+  
+  .modal-content h2,
+  .modal-content h3 {
+    font-size: 16px !important;
+  }
+}
+
+/* Forma mobil */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  
+  .form-group label {
+    font-size: 13px !important;
+  }
+  
+  .form-group input,
+  .form-group select {
+    padding: 8px !important;
+    font-size: 16px !important;
+  }
+}
+
+/* Jadval mobil */
+@media (max-width: 768px) {
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -10px;
+    padding: 0 10px;
+  }
+  
+  .table {
+    font-size: 12px !important;
+    min-width: 500px;
+  }
+  
+  .table th,
+  .table td {
+    padding: 6px 8px !important;
+    white-space: nowrap;
+  }
+}
+
+/* Tugmalar mobil */
+@media (max-width: 480px) {
+  .btn {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+  
+  .btn-add {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* Vrachlar sahifasi mobil */
+@media (max-width: 768px) {
+  .doctors-page {
+    padding: 10px !important;
+  }
+  
+  .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap !important;
+  }
+  
+  .search-input {
+    width: 100% !important;
+  }
+}
+
+/* Visits sahifasi mobil */
+@media (max-width: 768px) {
+  .visits-container {
+    padding: 10px !important;
+  }
+  
+  .visits-header {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .visits-controls {
+    flex-wrap: wrap !important;
+  }
+}
+
+/* Calendar mobil */
+@media (max-width: 768px) {
+  .calendar-grid {
+    grid-template-columns: repeat(7, 1fr) !important;
+    font-size: 11px !important;
+  }
+  
+  .calendar-day {
+    padding: 4px !important;
+    min-height: 60px !important;
+  }
+  
+  .calendar-day .day-number {
+    font-size: 12px !important;
+  }
+  
+  .calendar-day .visit-count {
+    font-size: 9px !important;
+  }
+}
+
+/* Alertlar mobil */
+@media (max-width: 480px) {
+  .error, .success {
+    font-size: 13px !important;
+    padding: 8px !important;
+  }
+}
+
+/* Scrollbar yashirish (ixtiyoriy) */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #667eea;
+  border-radius: 4px;
 }

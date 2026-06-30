@@ -3,19 +3,16 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCod_Lx-uuuNIriePrg_QpzeQCWaqCqDcY",
-  authDomain: "telegram-crm-mini-app.firebaseapp.com",
-  projectId: "telegram-crm-mini-app",
-  storageBucket: "telegram-crm-mini-app.firebasestorage.app",
-  messagingSenderId: "380419343041",
-  appId: "1:380419343041:web:beb8ebdf2d37b2f04f0a40"
+  apiKey: "AIzaSyA3L3LhvkAjvDIHzWgsl0fexRe8yqA5b00",
+  authDomain: "medhelper-crm.firebaseapp.com",
+  projectId: "medhelper-crm",
+  storageBucket: "medhelper-crm.firebasestorage.app",
+  messagingSenderId: "428276406189",
+  appId: "1:428276406189:web:f3613b6c9e6dc1601b7324"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize services
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
-console.log('✅ Firebase initialized successfully');
+console.log('✅ Firebase initialized');

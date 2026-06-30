@@ -2,6 +2,20 @@
 import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
 import { REGIONS_DATA, SPECIALITIES } from '../utils/regions';
+import { db } from '../firebase/config';
+import { 
+  collection, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { auth } from '../firebase/config';
 
 interface Doctor {
   id: string;
@@ -25,7 +39,8 @@ interface Doctor {
   aiScore: number;
   aiGrade: 'A' | 'B' | 'C' | 'D' | 'E';
   isActive: boolean;
-  createdAt: string;
+  createdAt: any;
+  updatedAt?: any;
 }
 
 interface ColumnConfig {
@@ -38,6 +53,8 @@ const Doctors: React.FC = () => {
   const { user } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -103,7 +120,7 @@ const Doctors: React.FC = () => {
   const getDebtDisplay = (debt: number, debtStatus: string) => {
     if (debtStatus === 'debt') {
       return {
-        text: '-' + debt.toLocaleString(),
+        text: '-' + Math.abs(debt).toLocaleString(),
         color: '#e74c3c',
         status: 'Қарз'
       };
@@ -122,232 +139,97 @@ const Doctors: React.FC = () => {
     }
   };
 
-  const getDebtBackground = (debtStatus: string) => {
-    const colors: Record<string, string> = {
-      debt: '#fde2e2',
-      profit: '#d4edda',
-      zero: '#fff3cd'
-    };
-    return colors[debtStatus] || '#f8f9fa';
+  // ============ FIREBASE FUNKSIYALARI ============
+
+  // Ma'lumotlarni yuklash
+  const loadDoctors = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const q = query(collection(db, 'doctors'), orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Doctor));
+      setDoctors(data);
+      console.log('✅ Врачлар юкланди:', data.length, 'та');
+    } catch (err: any) {
+      console.error('❌ Юклаш хатолиги:', err);
+      setError('Маълумотларни юклашда хатолик: ' + err.message);
+    }
+    setLoading(false);
   };
 
-  // Экспорт (Excel)
-  const handleExport = () => {
-    const data = filteredDoctors.map((doc, index) => ({
-      '№': index + 1,
-      'Исм': doc.name,
-      'Телефон': doc.phone,
-      'Мутахассислик': doc.speciality || '-',
-      'Иш жойи': doc.workplace || '-',
-      'Карта рақами': doc.cardNumber || '-',
-      'Карта эгаси': doc.cardHolder || '-',
-      'Telegram ID': doc.telegramId || '-',
-      'Туғилган куни': doc.birthdate || '-',
-      'Вилоят': doc.region || '-',
-      'Туман': doc.district || '-',
-      'Инвестиция (сўм)': doc.totalInvestment || 0,
-      'Комиссия (сўм)': doc.totalCommission || 0,
-      'Қарз (сўм)': doc.debtStatus === 'debt' ? '-' + doc.debt : doc.debt,
-      'Қарз ҳолати': doc.debtStatus === 'debt' ? 'Қарз' : doc.debtStatus === 'profit' ? 'Фойда' : 'Тенг',
-      'AI рейтинг': doc.aiGrade || 'E',
-      'AI балл': doc.aiScore || 0
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [
-      { wch: 5 }, { wch: 25 }, { wch: 18 }, { wch: 20 },
-      { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 },
-      { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
-      { wch: 12 }, { wch: 10 }
-    ];
-    XLSX.utils.book_append_sheet(wb, ws, 'Врачлар');
-    XLSX.writeFile(wb, 'врачлар_' + new Date().toISOString().split('T')[0] + '.xlsx');
-  };
-
-  // Импорт (Excel)
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-
-        const importedDoctors: Doctor[] = [];
-        jsonData.forEach((row: any, index: number) => {
-          const name = row['Исм'] || row['Ф.И.О'] || row['Name'] || '';
-          const phone = String(row['Телефон'] || row['Phone'] || '').replace(/\s/g, '');
-          
-          if (name && phone) {
-            const investment = Number(row['Инвестиция (сўм)'] || row['Investment'] || 0);
-            const commission = Number(row['Комиссия (сўм)'] || row['Commission'] || 0);
-            const { debt, debtStatus } = calculateDebt(investment, commission);
-            
-            importedDoctors.push({
-              id: Date.now().toString() + index,
-              name: name,
-              phone: phone,
-              speciality: row['Мутахассислик'] || row['Speciality'] || '',
-              workplace: row['Иш жойи'] || row['Workplace'] || '',
-              cardNumber: String(row['Карта рақами'] || row['CardNumber'] || '').replace(/\s/g, ''),
-              cardHolder: row['Карта эгаси'] || row['CardHolder'] || '',
-              region: row['Вилоят'] || row['Region'] || '',
-              district: row['Туман'] || row['District'] || '',
-              mpId: '',
-              projectId: '',
-              telegramId: row['Telegram ID'] || row['TelegramId'] || '',
-              birthdate: row['Туғилган куни'] || row['Birthdate'] || '',
-              prescriptionCount: 0,
-              totalInvestment: investment,
-              totalCommission: commission,
-              debt: debt,
-              debtStatus: debtStatus,
-              aiScore: Number(row['AI балл'] || row['AIScore'] || 0),
-              aiGrade: (row['AI рейтинг'] || row['AIGrade'] || 'E') as 'A' | 'B' | 'C' | 'D' | 'E',
-              isActive: true,
-              createdAt: new Date().toISOString()
-            });
-          }
-        });
-
-        if (importedDoctors.length > 0) {
-          setDoctors([...doctors, ...importedDoctors]);
-          alert(importedDoctors.length + ' та врач импорт қилинди!');
-        } else {
-          alert('Файлда врачлар топилмади');
-        }
-      } catch (error) {
-        alert('Файлни ўқишда хатолик юз берди.');
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    e.target.value = '';
-  };
-
+  // Real-time listener
   useEffect(() => {
-    const demoDoctors: Doctor[] = [
-      {
-        id: '1',
-        name: 'Алимов Али',
-        phone: '+998901234567',
-        speciality: 'Терапевт',
-        workplace: '1-поликлиника',
-        cardNumber: '8600123456789012',
-        cardHolder: 'Алимов Али',
-        region: 'Тошкент',
-        district: 'Чилонзор',
-        mpId: 'mp1',
-        projectId: 'proj1',
-        telegramId: '@alimov_ali',
-        birthdate: '1985-05-15',
-        prescriptionCount: 15,
-        totalInvestment: 5000000,
-        totalCommission: 3000000,
-        debt: 0,
-        debtStatus: 'debt',
-        aiScore: 95,
-        aiGrade: 'A',
-        isActive: true,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: '2',
-        name: 'Тангриберганова Дилдора',
-        phone: '+998902345678',
-        speciality: 'Кардиолог',
-        workplace: '2-поликлиника',
-        cardNumber: '8600234567890123',
-        cardHolder: 'Тангриберганова Д.',
-        region: 'Тошкент',
-        district: 'Яккасарой',
-        mpId: 'mp1',
-        projectId: 'proj1',
-        telegramId: '@dildora_t',
-        birthdate: '1990-08-22',
-        prescriptionCount: 10,
-        totalInvestment: 3000000,
-        totalCommission: 5000000,
-        debt: 0,
-        debtStatus: 'profit',
-        aiScore: 82,
-        aiGrade: 'B',
-        isActive: true,
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: '3',
-        name: 'Ибрагимов Гани',
-        phone: '+998903456789',
-        speciality: 'Невропотолог',
-        workplace: '3-поликлиника',
-        cardNumber: '8600345678901234',
-        cardHolder: 'Ибрагимов Гани',
-        region: 'Тошкент',
-        district: 'Миробод',
-        mpId: 'mp1',
-        projectId: 'proj1',
-        telegramId: '',
-        birthdate: '',
-        prescriptionCount: 5,
-        totalInvestment: 4000000,
-        totalCommission: 4000000,
-        debt: 0,
-        debtStatus: 'zero',
-        aiScore: 60,
-        aiGrade: 'C',
-        isActive: true,
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    const doctorsWithDebt = demoDoctors.map(doc => {
-      const { debt, debtStatus } = calculateDebt(doc.totalInvestment, doc.totalCommission);
-      return { ...doc, debt, debtStatus };
+    const q = query(collection(db, 'doctors'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Doctor));
+      setDoctors(data);
+      setLoading(false);
+      console.log('✅ Врачлар янгиланди:', data.length, 'та');
+    }, (error) => {
+      console.error('❌ Listener хатолиги:', error);
+      setError('Маълумотларни олишда хатолик: ' + error.message);
+      setLoading(false);
     });
 
-    setDoctors(doctorsWithDebt);
-    setLoading(false);
+    return () => unsubscribe();
   }, []);
 
-  const filteredDoctors = doctors.filter(doc =>
-    doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.phone.includes(searchTerm) ||
-    doc.speciality.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (doc.telegramId && doc.telegramId.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const handleAddDoctor = (e: React.FormEvent) => {
+  // Врач қўшиш
+  const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newDoctor: Doctor = {
-      id: Date.now().toString(),
-      ...formData,
-      prescriptionCount: 0,
-      totalInvestment: 0,
-      totalCommission: 0,
-      debt: 0,
-      debtStatus: 'zero',
-      aiScore: 0,
-      aiGrade: 'E',
-      isActive: true,
-      createdAt: new Date().toISOString()
-    };
-    setDoctors([...doctors, newDoctor]);
-    setShowModal(false);
-    setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
-    setDistricts([]);
+    setError('');
+    setSuccess('');
+
+    try {
+      const doctorData = {
+        ...formData,
+        prescriptionCount: 0,
+        totalInvestment: 0,
+        totalCommission: 0,
+        debt: 0,
+        debtStatus: 'zero',
+        aiScore: 0,
+        aiGrade: 'E',
+        isActive: true,
+        userId: auth.currentUser?.uid || 'anonymous',
+        userEmail: auth.currentUser?.email || '',
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'doctors'), doctorData);
+      setSuccess('✅ Врач муваффақиятли қўшилди!');
+      setShowModal(false);
+      setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
+      setDistricts([]);
+    } catch (err: any) {
+      console.error('❌ Қўшиш хатолиги:', err);
+      setError('Қўшишда хатолик: ' + err.message);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  // Врачни ўчириш
+  const handleDelete = async (id: string) => {
     if (!confirm('Ушбу врачни ўчирамизми?')) return;
-    setDoctors(doctors.filter(doc => doc.id !== id));
+    setError('');
+    setSuccess('');
+
+    try {
+      await deleteDoc(doc(db, 'doctors', id));
+      setSuccess('✅ Врач муваффақиятли ўчирилди!');
+    } catch (err: any) {
+      console.error('❌ Ўчириш хатолиги:', err);
+      setError('Ўчиришда хатолик: ' + err.message);
+    }
   };
 
+  // Врачни таҳрирлаш
   const handleEdit = (doctor: Doctor) => {
     setEditingId(doctor.id);
     setFormData({
@@ -368,25 +250,130 @@ const Doctors: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleUpdate = (e: React.FormEvent) => {
+  // Врачни янгилаш
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingId) return;
-    
-    const updatedDoctors = doctors.map(doc => {
-      if (doc.id === editingId) {
-        const updated = { ...doc, ...formData };
-        const { debt, debtStatus } = calculateDebt(updated.totalInvestment, updated.totalCommission);
-        return { ...updated, debt, debtStatus };
-      }
-      return doc;
-    });
-    
-    setDoctors(updatedDoctors);
-    setEditingId(null);
-    setShowModal(false);
-    setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
-    setDistricts([]);
+    setError('');
+    setSuccess('');
+
+    try {
+      await updateDoc(doc(db, 'doctors', editingId), {
+        ...formData,
+        updatedAt: serverTimestamp()
+      });
+      setSuccess('✅ Врач муваффақиятли янгиланди!');
+      setEditingId(null);
+      setShowModal(false);
+      setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
+      setDistricts([]);
+    } catch (err: any) {
+      console.error('❌ Янгилаш хатолиги:', err);
+      setError('Янгилашда хатолик: ' + err.message);
+    }
   };
+
+  // ============ EKSPORT/IMPORT ============
+
+  // Экспорт (Excel)
+  const handleExport = () => {
+    const data = filteredDoctors.map((doc, index) => ({
+      '№': index + 1,
+      'Исм': doc.name,
+      'Телефон': doc.phone,
+      'Мутахассислик': doc.speciality || '-',
+      'Иш жойи': doc.workplace || '-',
+      'Карта рақами': doc.cardNumber || '-',
+      'Карта эгаси': doc.cardHolder || '-',
+      'Telegram ID': doc.telegramId || '-',
+      'Туғилган куни': doc.birthdate || '-',
+      'Вилоят': doc.region || '-',
+      'Туман': doc.district || '-',
+      'Қарз (сўм)': doc.debtStatus === 'debt' ? '-' + Math.abs(doc.debt) : doc.debt,
+      'Қарз ҳолати': doc.debtStatus === 'debt' ? 'Қарз' : doc.debtStatus === 'profit' ? 'Фойда' : 'Тенг',
+      'AI рейтинг': doc.aiGrade || 'E',
+      'AI балл': doc.aiScore || 0
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [
+      { wch: 5 }, { wch: 25 }, { wch: 18 }, { wch: 20 },
+      { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 15 },
+      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 10 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, 'Врачлар');
+    XLSX.writeFile(wb, 'врачлар_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  };
+
+  // Импорт (Excel)
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+        let importedCount = 0;
+        for (const row of jsonData) {
+          const name = row['Исм'] || row['Ф.И.О'] || row['Name'] || '';
+          const phone = String(row['Телефон'] || row['Phone'] || '').replace(/\s/g, '');
+          
+          if (name && phone) {
+            await addDoc(collection(db, 'doctors'), {
+              name: name,
+              phone: phone,
+              speciality: row['Мутахассислик'] || row['Speciality'] || '',
+              workplace: row['Иш жойи'] || row['Workplace'] || '',
+              cardNumber: String(row['Карта рақами'] || row['CardNumber'] || '').replace(/\s/g, ''),
+              cardHolder: row['Карта эгаси'] || row['CardHolder'] || '',
+              region: row['Вилоят'] || row['Region'] || '',
+              district: row['Туман'] || row['District'] || '',
+              telegramId: row['Telegram ID'] || row['TelegramId'] || '',
+              birthdate: row['Туғилган куни'] || row['Birthdate'] || '',
+              prescriptionCount: 0,
+              totalInvestment: 0,
+              totalCommission: 0,
+              debt: 0,
+              debtStatus: 'zero',
+              aiScore: Number(row['AI балл'] || row['AIScore'] || 0),
+              aiGrade: (row['AI рейтинг'] || row['AIGrade'] || 'E') as 'A' | 'B' | 'C' | 'D' | 'E',
+              isActive: true,
+              userId: auth.currentUser?.uid || 'anonymous',
+              createdAt: serverTimestamp()
+            });
+            importedCount++;
+          }
+        }
+
+        if (importedCount > 0) {
+          setSuccess('✅ ' + importedCount + ' та врач импорт қилинди!');
+        } else {
+          setError('Файлда врачлар топилмади');
+        }
+      } catch (error) {
+        console.error('❌ Импорт хатолиги:', error);
+        setError('Файлни ўқишда хатолик юз берди.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  // ============ ФИЛЬТР ============
+
+  const filteredDoctors = doctors.filter(doc =>
+    doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doc.phone?.includes(searchTerm) ||
+    doc.speciality?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (doc.telegramId && doc.telegramId.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   const getGradeColor = (grade: string) => {
     const colors: Record<string, string> = {
@@ -483,11 +470,24 @@ const Doctors: React.FC = () => {
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Юкланмоқда...</div>;
+    return <div style={{ padding: '40px', textAlign: 'center' }}>⏳ Юкланмоқда...</div>;
   }
 
   return (
     <div style={{ padding: '20px' }}>
+      {/* Error/Success Messages */}
+      {error && (
+        <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+          ❌ {error}
+        </div>
+      )}
+      {success && (
+        <div style={{ background: '#efe', color: '#3c3', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+          ✅ {success}
+        </div>
+      )}
+
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2 style={{ margin: 0 }}>👨‍⚕️ Врачлар ({doctors.length})</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -669,7 +669,7 @@ const Doctors: React.FC = () => {
               {filteredDoctors.length === 0 ? (
                 <tr>
                   <td colSpan={columns.filter(c => c.visible).length} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                    Ҳеч қандай врач топилмади
+                    📭 Ҳеч қандай врач топилмади
                   </td>
                 </tr>
               ) : (
@@ -686,6 +686,7 @@ const Doctors: React.FC = () => {
         </div>
       </div>
 
+      {/* Modal Form */}
       {showModal && (
         <div
           style={{

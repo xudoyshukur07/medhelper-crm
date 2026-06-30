@@ -1,11 +1,89 @@
-﻿body {
+﻿* {
   margin: 0;
-  padding: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f0f2f5;
-  color: #1a1a2e;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-* {
-  box-sizing: border-box;
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #f5f7fa;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Mobil uchun asosiy sozlamalar */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  /* Kartochkalar */
+  .card {
+    padding: 12px !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Jadval */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .table {
+    font-size: 12px !important;
+    min-width: 600px;
+  }
+  
+  .table th, .table td {
+    padding: 6px 8px !important;
+  }
+  
+  /* Forma */
+  .form-group input,
+  .form-group select {
+    font-size: 16px !important; /* iOS zoom oldini olish */
+  }
+  
+  /* Tugmalar */
+  .btn {
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+  }
+}
+
+/* Juda kichik ekranlar (telefon) */
+@media (max-width: 480px) {
+  .page-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap !important;
+  }
+  
+  .search-input {
+    width: 100% !important;
+    min-width: unset !important;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  
+  .modal-content {
+    width: 95% !important;
+    padding: 16px !important;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
