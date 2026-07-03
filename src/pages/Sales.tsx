@@ -1,17 +1,35 @@
-﻿import { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
+import { db, auth } from '../firebase/config';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  updateDoc,
+  query,
+  onSnapshot,
+  serverTimestamp,
+  where,
+  orderBy
+} from 'firebase/firestore';
+
+// ============ INTERFACES ============
 
 interface ZoneSales {
   id: string;
-  region: string;
-  district: string;
+  regionId: string;
+  regionName: string;
+  zoneId: string;
+  zoneName: string;
   month: string;
   products: { productId: string; quantity: number }[];
   totalAmount: number;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
+  userId: string;
+  createdAt: any;
+  updatedAt?: any;
 }
 
 interface DoctorSales {
@@ -19,14 +37,14 @@ interface DoctorSales {
   doctorId: string;
   doctorName: string;
   doctorRegion: string;
-  doctorDistrict: string;
+  doctorZone: string;
   month: string;
   products: { productId: string; quantity: number }[];
   totalAmount: number;
   totalCommission: number;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
+  userId: string;
+  createdAt: any;
+  updatedAt?: any;
 }
 
 interface PharmacySales {
@@ -34,16 +52,18 @@ interface PharmacySales {
   pharmacyName: string;
   pharmacyAddress: string;
   inn: string;
-  region: string;
-  district: string;
+  regionId: string;
+  regionName: string;
+  zoneId: string;
+  zoneName: string;
   month: string;
   products: { productId: string; quantity: number }[];
   totalAmount: number;
   invoiceNumber?: string;
   notes?: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
+  userId: string;
+  createdAt: any;
+  updatedAt?: any;
 }
 
 interface Product {
@@ -59,27 +79,64 @@ interface Doctor {
   id: string;
   name: string;
   region: string;
-  district: string;
+  zone: string;
 }
 
-const PHARMACY_INN_DB: { [key: string]: { region: string; district: string } } = {
-  '123456789': { region: 'Тошкент', district: 'Чилонзор' },
-  '987654321': { region: 'Тошкент', district: 'Яккасарой' },
-  '456789123': { region: 'Самарқанд', district: 'Самарқанд ш.' },
-  '789123456': { region: 'Самарқанд', district: 'Булунғур' },
-  '321654987': { region: 'Тошкент', district: 'Миробод' },
+// ============ REGIONS MODULIDAN KELADIGAN MA'LUMOTLAR ============
+
+interface Region {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  groupId: string;
+  groupName: string;
+  zoneIds: string[];
+  zoneNames: string[];
+  isActive: boolean;
+}
+
+interface Zone {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  groupId: string;
+  groupName: string;
+  viloyatlar: string[];
+  tumanlar: string[];
+  isActive: boolean;
+}
+
+// ============ INN MA'LUMOTLARI ============
+
+const PHARMACY_INN_DB: { [key: string]: { region: string; zone: string } } = {
+  '123456789': { region: 'Тошкент', zone: 'Чилонзор' },
+  '987654321': { region: 'Тошкент', zone: 'Яккасарой' },
+  '456789123': { region: 'Самарқанд', zone: 'Самарқанд ш.' },
+  '789123456': { region: 'Самарқанд', zone: 'Булунғур' },
+  '321654987': { region: 'Тошкент', zone: 'Миробод' },
 };
+
+// ============ ASOSIY KOMPONENT ============
 
 const Sales: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'zone' | 'doctor' | 'pharmacy'>('zone');
-  
+
+  // ===== REGIONS MODULIDAN KELGAN MA'LUMOTLAR =====
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
+
+  // Zone Sales
   const [zoneSales, setZoneSales] = useState<ZoneSales[]>([]);
   const [zoneProducts, setZoneProducts] = useState<{ productId: string; quantity: number }[]>([]);
   const [zoneMonth, setZoneMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [zoneRegion, setZoneRegion] = useState('');
-  const [zoneDistrict, setZoneDistrict] = useState('');
-  
+  const [selectedRegionId, setSelectedRegionId] = useState('');
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+  const [availableZones, setAvailableZones] = useState<Zone[]>([]);
+
+  // Doctor Sales
   const [doctorSales, setDoctorSales] = useState<DoctorSales[]>([]);
   const [doctorProducts, setDoctorProducts] = useState<{ productId: string; quantity: number }[]>([]);
   const [doctorMonth, setDoctorMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -87,115 +144,335 @@ const Sales: React.FC = () => {
   const [bulkProducts, setBulkProducts] = useState<{ productId: string; quantity: number }[]>([
     { productId: '', quantity: 1 }
   ]);
-  
+
+  // Pharmacy Sales
   const [pharmacySales, setPharmacySales] = useState<PharmacySales[]>([]);
   const [pharmacyProducts, setPharmacyProducts] = useState<{ productId: string; quantity: number }[]>([]);
   const [pharmacyMonth, setPharmacyMonth] = useState(new Date().toISOString().slice(0, 7));
   const [pharmacyName, setPharmacyName] = useState('');
   const [pharmacyAddress, setPharmacyAddress] = useState('');
   const [pharmacyInn, setPharmacyInn] = useState('');
-  const [pharmacyRegion, setPharmacyRegion] = useState('');
-  const [pharmacyDistrict, setPharmacyDistrict] = useState('');
+  const [pharmacyRegionId, setPharmacyRegionId] = useState('');
+  const [pharmacyZoneId, setPharmacyZoneId] = useState('');
+  const [pharmacyAvailableZones, setPharmacyAvailableZones] = useState<Zone[]>([]);
   const [pharmacyInvoice, setPharmacyInvoice] = useState('');
   const [pharmacyNotes, setPharmacyNotes] = useState('');
 
   const [products, setProducts] = useState<Product[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userGroups, setUserGroups] = useState<string[]>([]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
+  // ============ LOAD REGIONS FROM FIREBASE ============
+
+  // Regions modulidan regionlarni yuklash
   useEffect(() => {
-    if (user) {
-      if (user.groupId) {
-        setUserGroups([user.groupId]);
-      }
-      if (user.region) {
-        setZoneRegion(user.region);
-      }
-      if (user.district) {
-        setZoneDistrict(user.district);
-      }
-    }
-  }, [user]);
-
-  useEffect(() => {
-    const demoProducts: Product[] = [
-      { id: '1', name: 'Амаредетрим', groupId: '1', groupName: 'Vita', price: 150000, commissionAmount: 15000 },
-      { id: '2', name: 'Ферсикард', groupId: '2', groupName: 'Forte', price: 200000, commissionAmount: 24000 },
-      { id: '3', name: 'Долмасто', groupId: '2', groupName: 'Forte', price: 180000, commissionAmount: 18000 },
-      { id: '4', name: 'Репродуктол', groupId: '1', groupName: 'Vita', price: 250000, commissionAmount: 37500 },
-      { id: '5', name: 'Кардио-препарат', groupId: '3', groupName: 'Cardio', price: 300000, commissionAmount: 30000 },
-      { id: '6', name: 'Нейро-препарат', groupId: '4', groupName: 'Neuro', price: 280000, commissionAmount: 28000 },
-    ];
-    setProducts(demoProducts);
-
-    const demoDoctors: Doctor[] = [
-      { id: '1', name: 'Алимов Али', region: 'Тошкент', district: 'Чилонзор' },
-      { id: '2', name: 'Тангриберганова Дилдора', region: 'Тошкент', district: 'Яккасарой' },
-      { id: '3', name: 'Ибрагимов Гани', region: 'Тошкент', district: 'Миробод' },
-      { id: '4', name: 'Каримова Нигора', region: 'Самарқанд', district: 'Самарқанд ш.' },
-    ];
-    setDoctors(demoDoctors);
-
-    setLoading(false);
+    const q = query(collection(db, 'regions'), where('isActive', '==', true));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Region));
+      setRegions(data);
+    });
+    return unsubscribe;
   }, []);
 
-  const getUserProducts = () => {
-    let filtered = products;
-    if (userGroups.length > 0) {
-      filtered = filtered.filter(p => userGroups.includes(p.groupId));
-    }
-    if (user?.role === 'superadmin' || user?.role === 'ceo') {
-      return products;
-    }
-    return filtered;
-  };
+  // Regions modulidan zonalarni yuklash
+  useEffect(() => {
+    const q = query(collection(db, 'zones'), where('isActive', '==', true));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Zone));
+      setZones(data);
+    });
+    return unsubscribe;
+  }, []);
 
-  const getUserDoctors = () => {
-    if (user?.role === 'superadmin' || user?.role === 'ceo') {
-      return doctors;
+  // Region tanlanganda unga tegishli zonalarni filtrlash
+  useEffect(() => {
+    if (selectedRegionId) {
+      const region = regions.find(r => r.id === selectedRegionId);
+      if (region) {
+        const filteredZones = zones.filter(z => region.zoneIds.includes(z.id));
+        setAvailableZones(filteredZones);
+      } else {
+        setAvailableZones([]);
+      }
+    } else {
+      setAvailableZones([]);
     }
-    if (user?.region) {
-      return doctors.filter(d => d.region === user.region);
+  }, [selectedRegionId, regions, zones]);
+
+  // Pharmacy uchun Region tanlanganda zonalarni filtrlash
+  useEffect(() => {
+    if (pharmacyRegionId) {
+      const region = regions.find(r => r.id === pharmacyRegionId);
+      if (region) {
+        const filteredZones = zones.filter(z => region.zoneIds.includes(z.id));
+        setPharmacyAvailableZones(filteredZones);
+      } else {
+        setPharmacyAvailableZones([]);
+      }
+    } else {
+      setPharmacyAvailableZones([]);
     }
-    return doctors;
-  };
+  }, [pharmacyRegionId, regions, zones]);
 
-  const availableProducts = getUserProducts();
-  const availableDoctors = getUserDoctors();
+  // ============ LOAD OTHER DATA ============
 
-  // Зона
-  const handleAddZoneSale = () => {
-    if (!zoneRegion || zoneProducts.length === 0) {
-      alert('Вилоят ва камида 1 та препарат киритинг!');
+  // Load products
+  useEffect(() => {
+    const q = query(collection(db, 'products'), where('isActive', '==', true));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Product));
+      setProducts(data);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Load doctors
+  useEffect(() => {
+    const q = query(collection(db, 'doctors'), where('isActive', '==', true));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Doctor));
+      setDoctors(data);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Load zone sales
+  useEffect(() => {
+    const q = query(collection(db, 'zoneSales'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as ZoneSales));
+      setZoneSales(data);
+      setLoading(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Load doctor sales
+  useEffect(() => {
+    const q = query(collection(db, 'doctorSales'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as DoctorSales));
+      setDoctorSales(data);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Load pharmacy sales
+  useEffect(() => {
+    const q = query(collection(db, 'pharmacySales'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as PharmacySales));
+      setPharmacySales(data);
+    });
+    return unsubscribe;
+  }, []);
+
+  // ============ ZONE SALES CRUD ============
+
+  const handleAddZoneSale = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!selectedRegionId || zoneProducts.length === 0) {
+      setError('Регион ва камида 1 та препарат киритинг!');
       return;
     }
+
+    const region = regions.find(r => r.id === selectedRegionId);
+    const zone = zones.find(z => z.id === selectedZoneId);
+
     const totalAmount = zoneProducts.reduce((sum, p) => {
       const product = products.find(pr => pr.id === p.productId);
       return sum + (product?.price || 0) * p.quantity;
     }, 0);
 
-    const newSale: ZoneSales = {
-      id: Date.now().toString(),
-      region: zoneRegion,
-      district: zoneDistrict || 'Барча туманлар',
-      month: zoneMonth,
-      products: zoneProducts,
-      totalAmount,
-      createdBy: user?.id || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setZoneSales([...zoneSales, newSale]);
-    setZoneProducts([]);
-    alert('Зона сотуви сақланди!');
+    try {
+      await addDoc(collection(db, 'zoneSales'), {
+        regionId: selectedRegionId,
+        regionName: region?.name || '',
+        zoneId: selectedZoneId || '',
+        zoneName: zone?.name || 'Барча зоналар',
+        month: zoneMonth,
+        products: zoneProducts,
+        totalAmount,
+        userId: auth.currentUser?.uid || 'anonymous',
+        userEmail: auth.currentUser?.email || '',
+        createdAt: serverTimestamp()
+      });
+      setSuccess('Зона сотуви сақланди!');
+      setZoneProducts([]);
+      setSelectedRegionId('');
+      setSelectedZoneId('');
+      setAvailableZones([]);
+    } catch (err: any) {
+      setError('Xatolik: ' + err.message);
+    }
   };
+
+  const handleDeleteZoneSale = async (id: string) => {
+    if (!confirm('Ушбу сотувни ўчирамизми?')) return;
+    try {
+      await deleteDoc(doc(db, 'zoneSales', id));
+      setSuccess('Сотув ўчирилди!');
+    } catch (err: any) {
+      setError('Xatolik: ' + err.message);
+    }
+  };
+
+  // ============ DOCTOR SALES CRUD ============
+
+  const handleAddDoctorSale = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!selectedDoctor || doctorProducts.length === 0) {
+      setError('Врач ва камида 1 та препарат киритинг!');
+      return;
+    }
+
+    const doctor = doctors.find(d => d.id === selectedDoctor);
+    const totalAmount = doctorProducts.reduce((sum, p) => {
+      const product = products.find(pr => pr.id === p.productId);
+      return sum + (product?.price || 0) * p.quantity;
+    }, 0);
+    const totalCommission = doctorProducts.reduce((sum, p) => {
+      const product = products.find(pr => pr.id === p.productId);
+      return sum + (product?.commissionAmount || 0) * p.quantity;
+    }, 0);
+
+    try {
+      await addDoc(collection(db, 'doctorSales'), {
+        doctorId: selectedDoctor,
+        doctorName: doctor?.name || '',
+        doctorRegion: doctor?.region || '',
+        doctorZone: doctor?.zone || '',
+        month: doctorMonth,
+        products: doctorProducts,
+        totalAmount,
+        totalCommission,
+        userId: auth.currentUser?.uid || 'anonymous',
+        userEmail: auth.currentUser?.email || '',
+        createdAt: serverTimestamp()
+      });
+      setSuccess('Врач сотуви сақланди!');
+      setDoctorProducts([]);
+      setSelectedDoctor('');
+    } catch (err: any) {
+      setError('Xatolik: ' + err.message);
+    }
+  };
+
+  const handleDeleteDoctorSale = async (id: string) => {
+    if (!confirm('Ушбу сотувни ўчирамизми?')) return;
+    try {
+      await deleteDoc(doc(db, 'doctorSales', id));
+      setSuccess('Сотув ўчирилди!');
+    } catch (err: any) {
+      setError('Xatolik: ' + err.message);
+    }
+  };
+
+  // ============ PHARMACY SALES CRUD ============
+
+  const handleAddPharmacySale = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!pharmacyName || pharmacyProducts.length === 0) {
+      setError('Аптека номи ва камида 1 та препарат киритинг!');
+      return;
+    }
+
+    const region = regions.find(r => r.id === pharmacyRegionId);
+    const zone = zones.find(z => z.id === pharmacyZoneId);
+
+    const totalAmount = pharmacyProducts.reduce((sum, p) => {
+      const product = products.find(pr => pr.id === p.productId);
+      return sum + (product?.price || 0) * p.quantity;
+    }, 0);
+
+    try {
+      await addDoc(collection(db, 'pharmacySales'), {
+        pharmacyName,
+        pharmacyAddress: pharmacyAddress || '-',
+        inn: pharmacyInn || '',
+        regionId: pharmacyRegionId || '',
+        regionName: region?.name || '',
+        zoneId: pharmacyZoneId || '',
+        zoneName: zone?.name || '',
+        month: pharmacyMonth,
+        products: pharmacyProducts,
+        totalAmount,
+        invoiceNumber: pharmacyInvoice || '',
+        notes: pharmacyNotes || '',
+        userId: auth.currentUser?.uid || 'anonymous',
+        userEmail: auth.currentUser?.email || '',
+        createdAt: serverTimestamp()
+      });
+      setSuccess('Аптека сотуви сақланди!');
+      setPharmacyProducts([]);
+      setPharmacyName('');
+      setPharmacyAddress('');
+      setPharmacyInn('');
+      setPharmacyRegionId('');
+      setPharmacyZoneId('');
+      setPharmacyAvailableZones([]);
+      setPharmacyInvoice('');
+      setPharmacyNotes('');
+    } catch (err: any) {
+      setError('Xatolik: ' + err.message);
+    }
+  };
+
+  const handleDeletePharmacySale = async (id: string) => {
+    if (!confirm('Ушбу сотувни ўчирамизми?')) return;
+    try {
+      await deleteDoc(doc(db, 'pharmacySales', id));
+      setSuccess('Сотув ўчирилди!');
+    } catch (err: any) {
+      setError('Xatolik: ' + err.message);
+    }
+  };
+
+  // ============ PRODUCT HANDLERS ============
 
   const handleRemoveZoneProduct = (index: number) => {
     setZoneProducts(zoneProducts.filter((_, i) => i !== index));
   };
 
-  // Врач
+  const handleRemoveDoctorProduct = (index: number) => {
+    setDoctorProducts(doctorProducts.filter((_, i) => i !== index));
+  };
+
+  const handleRemovePharmacyProduct = (index: number) => {
+    setPharmacyProducts(pharmacyProducts.filter((_, i) => i !== index));
+  };
+
+  // ============ BULK PRODUCT HANDLERS ============
+
   const handleBulkProductChange = (index: number, field: 'productId' | 'quantity', value: string | number) => {
     const newBulk = [...bulkProducts];
     newBulk[index] = { ...newBulk[index], [field]: value };
@@ -240,105 +517,14 @@ const Sales: React.FC = () => {
     alert(validProducts.length + ' та препарат қўшилди!');
   };
 
-  const handleAddDoctorSale = () => {
-    if (!selectedDoctor || doctorProducts.length === 0) {
-      alert('Врач ва камида 1 та препарат киритинг!');
-      return;
-    }
-    const doctor = doctors.find(d => d.id === selectedDoctor);
-    const totalAmount = doctorProducts.reduce((sum, p) => {
-      const product = products.find(pr => pr.id === p.productId);
-      return sum + (product?.price || 0) * p.quantity;
-    }, 0);
-    const totalCommission = doctorProducts.reduce((sum, p) => {
-      const product = products.find(pr => pr.id === p.productId);
-      return sum + (product?.commissionAmount || 0) * p.quantity;
-    }, 0);
+  // ============ PHARMACY IMPORT ============
 
-    const newSale: DoctorSales = {
-      id: Date.now().toString(),
-      doctorId: selectedDoctor,
-      doctorName: doctor?.name || '',
-      doctorRegion: doctor?.region || '',
-      doctorDistrict: doctor?.district || '',
-      month: doctorMonth,
-      products: doctorProducts,
-      totalAmount,
-      totalCommission,
-      createdBy: user?.id || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setDoctorSales([...doctorSales, newSale]);
-    setDoctorProducts([]);
-    alert('Врач сотуви сақланди!');
-  };
-
-  const handleRemoveDoctorProduct = (index: number) => {
-    setDoctorProducts(doctorProducts.filter((_, i) => i !== index));
-  };
-
-  // Аптека
-  const handlePharmacyInnCheck = () => {
-    if (pharmacyInn && PHARMACY_INN_DB[pharmacyInn]) {
-      const data = PHARMACY_INN_DB[pharmacyInn];
-      setPharmacyRegion(data.region);
-      setPharmacyDistrict(data.district);
-      alert('ИНН бўйича маълумот топилди: ' + data.region + ', ' + data.district);
-    } else if (pharmacyInn) {
-      alert('ИНН бўйича маълумот топилмади!');
-    }
-  };
-
-  const handleAddPharmacySale = () => {
-    if (!pharmacyName || pharmacyProducts.length === 0) {
-      alert('Аптека номи ва камида 1 та препарат киритинг!');
-      return;
-    }
-    const totalAmount = pharmacyProducts.reduce((sum, p) => {
-      const product = products.find(pr => pr.id === p.productId);
-      return sum + (product?.price || 0) * p.quantity;
-    }, 0);
-
-    const newSale: PharmacySales = {
-      id: Date.now().toString(),
-      pharmacyName,
-      pharmacyAddress: pharmacyAddress || '-',
-      inn: pharmacyInn || '',
-      region: pharmacyRegion || user?.region || '-',
-      district: pharmacyDistrict || user?.district || '-',
-      month: pharmacyMonth,
-      products: pharmacyProducts,
-      totalAmount,
-      invoiceNumber: pharmacyInvoice || '',
-      notes: pharmacyNotes || '',
-      createdBy: user?.id || '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setPharmacySales([...pharmacySales, newSale]);
-    setPharmacyProducts([]);
-    setPharmacyName('');
-    setPharmacyAddress('');
-    setPharmacyInn('');
-    setPharmacyRegion('');
-    setPharmacyDistrict('');
-    setPharmacyInvoice('');
-    setPharmacyNotes('');
-    alert('Аптека сотуви сақланди!');
-  };
-
-  const handleRemovePharmacyProduct = (index: number) => {
-    setPharmacyProducts(pharmacyProducts.filter((_, i) => i !== index));
-  };
-
-  // Excel импорт
   const handlePharmacyImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
@@ -350,48 +536,56 @@ const Sales: React.FC = () => {
         let pharmacyName = '';
         let pharmacyInn = '';
         let pharmacyAddress = '';
-        let pharmacyRegion = '';
-        let pharmacyDistrict = '';
+        let pharmacyRegionId = '';
+        let pharmacyZoneId = '';
 
         jsonData.forEach((row: any) => {
           const productName = row['Препарат'] || row['Drug'] || '';
           const quantity = Number(row['Миқдор'] || row['Quantity'] || 0);
           const product = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
-          
+
           if (!pharmacyName && row['Аптека']) pharmacyName = row['Аптека'];
           if (!pharmacyInn && row['ИНН']) pharmacyInn = String(row['ИНН']);
           if (!pharmacyAddress && row['Манзил']) pharmacyAddress = row['Манзил'];
-          
+
           if (product && quantity > 0) {
             importedProducts.push({ productId: product.id, quantity });
             totalAmount += product.price * quantity;
           }
         });
 
+        // INN bo'yicha region va zone aniqlash
         if (pharmacyInn && PHARMACY_INN_DB[pharmacyInn]) {
           const loc = PHARMACY_INN_DB[pharmacyInn];
-          pharmacyRegion = loc.region;
-          pharmacyDistrict = loc.district;
+          const region = regions.find(r => r.name === loc.region);
+          if (region) {
+            pharmacyRegionId = region.id;
+            const zone = zones.find(z => z.name === loc.zone && region.zoneIds.includes(z.id));
+            if (zone) pharmacyZoneId = zone.id;
+          }
         }
 
         if (importedProducts.length > 0) {
-          const newSale: PharmacySales = {
-            id: Date.now().toString(),
+          const region = regions.find(r => r.id === pharmacyRegionId);
+          const zone = zones.find(z => z.id === pharmacyZoneId);
+
+          await addDoc(collection(db, 'pharmacySales'), {
             pharmacyName: pharmacyName || 'Импорт қилинган',
             pharmacyAddress: pharmacyAddress || '-',
             inn: pharmacyInn || '',
-            region: pharmacyRegion || user?.region || '-',
-            district: pharmacyDistrict || user?.district || '-',
+            regionId: pharmacyRegionId || '',
+            regionName: region?.name || '',
+            zoneId: pharmacyZoneId || '',
+            zoneName: zone?.name || '',
             month: pharmacyMonth,
             products: importedProducts,
             totalAmount,
             invoiceNumber: row['Номер'] || '',
             notes: row['Изоҳ'] || '',
-            createdBy: user?.id || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-          setPharmacySales([...pharmacySales, newSale]);
+            userId: auth.currentUser?.uid || 'anonymous',
+            userEmail: auth.currentUser?.email || '',
+            createdAt: serverTimestamp()
+          });
           alert(importedProducts.length + ' та препарат импорт қилинди!');
         } else {
           alert('Файлда препаратлар топилмади!');
@@ -404,7 +598,8 @@ const Sales: React.FC = () => {
     e.target.value = '';
   };
 
-  // Excel экспорт
+  // ============ EXPORT ============
+
   const handleExport = () => {
     let data: any[] = [];
     let fileName = '';
@@ -412,8 +607,8 @@ const Sales: React.FC = () => {
     if (activeTab === 'zone') {
       data = zoneSales.map((s, i) => ({
         '№': i + 1,
-        'Вилоят': s.region,
-        'Туман': s.district,
+        'Регион': s.regionName,
+        'Зона': s.zoneName,
         'Ой': s.month,
         'Препаратлар': s.products.map(p => {
           const product = products.find(pr => pr.id === p.productId);
@@ -426,8 +621,8 @@ const Sales: React.FC = () => {
       data = doctorSales.map((s, i) => ({
         '№': i + 1,
         'Врач': s.doctorName,
-        'Вилоят': s.doctorRegion,
-        'Туман': s.doctorDistrict,
+        'Регион': s.doctorRegion,
+        'Зона': s.doctorZone,
         'Ой': s.month,
         'Препаратлар': s.products.map(p => {
           const product = products.find(pr => pr.id === p.productId);
@@ -443,8 +638,8 @@ const Sales: React.FC = () => {
         'Аптека': s.pharmacyName,
         'ИНН': s.inn || '-',
         'Манзил': s.pharmacyAddress,
-        'Вилоят': s.region,
-        'Туман': s.district,
+        'Регион': s.regionName,
+        'Зона': s.zoneName,
         'Ой': s.month,
         'Препаратлар': s.products.map(p => {
           const product = products.find(pr => pr.id === p.productId);
@@ -463,12 +658,17 @@ const Sales: React.FC = () => {
     XLSX.writeFile(wb, fileName + '_' + new Date().toISOString().split('T')[0] + '.xlsx');
   };
 
+  // ============ RENDER ============
+
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Юкланмоқда...</div>;
+    return <div style={{ padding: '40px', textAlign: 'center' }}>⏳ Юкланмоқда...</div>;
   }
 
   return (
     <div style={{ padding: '20px' }}>
+      {error && <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>❌ {error}</div>}
+      {success && <div style={{ background: '#efe', color: '#3c3', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>✅ {success}</div>}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2 style={{ margin: 0 }}>💰 Сотувлар</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -482,7 +682,7 @@ const Sales: React.FC = () => {
         </div>
       </div>
 
-      {/* Таблар */}
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '2px solid #e8ecf1' }}>
         <button onClick={() => setActiveTab('zone')} style={{ padding: '10px 20px', background: activeTab === 'zone' ? '#667eea' : 'transparent', color: activeTab === 'zone' ? 'white' : '#333', border: 'none', borderRadius: '8px 8px 0 0', cursor: 'pointer', fontWeight: activeTab === 'zone' ? 'bold' : 'normal' }}>
           📍 Зона бўйича
@@ -495,14 +695,32 @@ const Sales: React.FC = () => {
         </button>
       </div>
 
-      {/* ===== 1-ҚИСМ: ЗОНА ===== */}
+      {/* ===== 1. ZONE ===== */}
       {activeTab === 'zone' && (
         <div>
           <div style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', marginBottom: '16px' }}>
             <h3 style={{ margin: '0 0 12px' }}>📍 Зона бўйича сотув қўшиш</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-              <input type="text" placeholder="Вилоят *" value={zoneRegion} onChange={(e) => setZoneRegion(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
-              <input type="text" placeholder="Туман" value={zoneDistrict} onChange={(e) => setZoneDistrict(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+              <select 
+                value={selectedRegionId} 
+                onChange={(e) => setSelectedRegionId(e.target.value)} 
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+              >
+                <option value="">Регион танланг *</option>
+                {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+              <select 
+                value={selectedZoneId} 
+                onChange={(e) => setSelectedZoneId(e.target.value)} 
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} 
+                disabled={!selectedRegionId || availableZones.length === 0}
+              >
+                <option value="">Зона танланг</option>
+                {availableZones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                {selectedRegionId && availableZones.length === 0 && (
+                  <option value="">Бу регионга зона бириктирилмаган</option>
+                )}
+              </select>
               <input type="month" value={zoneMonth} onChange={(e) => setZoneMonth(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
             </div>
             <div style={{ display: 'flex', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -510,7 +728,7 @@ const Sales: React.FC = () => {
                 value=""
                 onChange={(e) => {
                   if (e.target.value) {
-                    const product = availableProducts.find(p => p.id === e.target.value);
+                    const product = products.find(p => p.id === e.target.value);
                     if (product) {
                       const existing = zoneProducts.find(p => p.productId === product.id);
                       if (existing) {
@@ -524,7 +742,7 @@ const Sales: React.FC = () => {
                 style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px', flex: 1 }}
               >
                 <option value="">➕ Препарат қўшиш</option>
-                {availableProducts.filter(p => !zoneProducts.find(z => z.productId === p.id)).map(p => (
+                {products.map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({p.groupName})</option>
                 ))}
               </select>
@@ -551,14 +769,14 @@ const Sales: React.FC = () => {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ background: '#f8f9fa' }}>
-                  <tr><th>№</th><th>Вилоят</th><th>Туман</th><th>Ой</th><th>Препаратлар</th><th>Жами</th></tr>
+                  <tr><th>№</th><th>Регион</th><th>Зона</th><th>Ой</th><th>Препаратлар</th><th>Жами</th><th>Ҳаракат</th></tr>
                 </thead>
                 <tbody>
                   {zoneSales.map((s, i) => (
                     <tr key={s.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                       <td style={{ padding: '8px 12px' }}>{i + 1}</td>
-                      <td style={{ padding: '8px 12px' }}>{s.region}</td>
-                      <td style={{ padding: '8px 12px' }}>{s.district}</td>
+                      <td style={{ padding: '8px 12px' }}>{s.regionName}</td>
+                      <td style={{ padding: '8px 12px' }}>{s.zoneName}</td>
                       <td style={{ padding: '8px 12px' }}>{s.month}</td>
                       <td style={{ padding: '8px 12px', fontSize: '13px' }}>
                         {s.products.map(p => {
@@ -567,6 +785,7 @@ const Sales: React.FC = () => {
                         }).join(', ')}
                       </td>
                       <td style={{ padding: '8px 12px', fontWeight: 'bold' }}>{s.totalAmount.toLocaleString()} сўм</td>
+                      <td><button onClick={() => handleDeleteZoneSale(s.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -576,7 +795,7 @@ const Sales: React.FC = () => {
         </div>
       )}
 
-      {/* ===== 2-ҚИСМ: ВРАЧ ===== */}
+      {/* ===== 2. DOCTOR ===== */}
       {activeTab === 'doctor' && (
         <div>
           <div style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', marginBottom: '16px' }}>
@@ -584,7 +803,7 @@ const Sales: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
               <select value={selectedDoctor} onChange={(e) => setSelectedDoctor(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}>
                 <option value="">Врач танланг *</option>
-                {availableDoctors.map(d => <option key={d.id} value={d.id}>{d.name} ({d.region})</option>)}
+                {doctors.map(d => <option key={d.id} value={d.id}>{d.name} ({d.region} - {d.zone})</option>)}
               </select>
               <input type="month" value={doctorMonth} onChange={(e) => setDoctorMonth(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
             </div>
@@ -599,7 +818,7 @@ const Sales: React.FC = () => {
                     style={{ flex: 1, padding: '6px', border: '1px solid #ddd', borderRadius: '4px' }}
                   >
                     <option value="">Препарат танланг</option>
-                    {availableProducts.filter(p => !doctorProducts.find(z => z.productId === p.id) && !bulkProducts.some(b => b.productId === p.id && b !== item)).map(p => (
+                    {products.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
@@ -644,7 +863,7 @@ const Sales: React.FC = () => {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ background: '#f8f9fa' }}>
-                  <tr><th>№</th><th>Врач</th><th>Ой</th><th>Препаратлар</th><th>Жами</th><th>Комиссия</th></tr>
+                  <tr><th>№</th><th>Врач</th><th>Ой</th><th>Препаратлар</th><th>Жами</th><th>Комиссия</th><th>Ҳаракат</th></tr>
                 </thead>
                 <tbody>
                   {doctorSales.map((s, i) => (
@@ -660,6 +879,7 @@ const Sales: React.FC = () => {
                       </td>
                       <td style={{ padding: '8px 12px', fontWeight: 'bold' }}>{s.totalAmount.toLocaleString()} сўм</td>
                       <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#2ecc71' }}>{s.totalCommission.toLocaleString()} сўм</td>
+                      <td><button onClick={() => handleDeleteDoctorSale(s.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -669,7 +889,7 @@ const Sales: React.FC = () => {
         </div>
       )}
 
-      {/* ===== 3-ҚИСМ: АПТЕКА ===== */}
+      {/* ===== 3. PHARMACY ===== */}
       {activeTab === 'pharmacy' && (
         <div>
           <div style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', marginBottom: '16px' }}>
@@ -680,12 +900,43 @@ const Sales: React.FC = () => {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
               <input type="text" placeholder="ИНН" value={pharmacyInn} onChange={(e) => setPharmacyInn(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
-              <button onClick={handlePharmacyInnCheck} style={{ padding: '8px', background: '#f39c12', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>🔍 ИНН текшириш</button>
+              <button onClick={() => {
+                if (pharmacyInn && PHARMACY_INN_DB[pharmacyInn]) {
+                  const data = PHARMACY_INN_DB[pharmacyInn];
+                  const region = regions.find(r => r.name === data.region);
+                  if (region) {
+                    setPharmacyRegionId(region.id);
+                    const zone = zones.find(z => z.name === data.zone && region.zoneIds.includes(z.id));
+                    if (zone) setPharmacyZoneId(zone.id);
+                  }
+                  alert('ИНН бўйича маълумот топилди: ' + data.region + ', ' + data.zone);
+                } else if (pharmacyInn) {
+                  alert('ИНН бўйича маълумот топилмади!');
+                }
+              }} style={{ padding: '8px', background: '#f39c12', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>🔍 ИНН текшириш</button>
               <input type="month" value={pharmacyMonth} onChange={(e) => setPharmacyMonth(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-              <input type="text" placeholder="Вилоят" value={pharmacyRegion} onChange={(e) => setPharmacyRegion(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
-              <input type="text" placeholder="Туман" value={pharmacyDistrict} onChange={(e) => setPharmacyDistrict(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+              <select 
+                value={pharmacyRegionId} 
+                onChange={(e) => setPharmacyRegionId(e.target.value)} 
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+              >
+                <option value="">Регион танланг</option>
+                {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+              <select 
+                value={pharmacyZoneId} 
+                onChange={(e) => setPharmacyZoneId(e.target.value)} 
+                style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                disabled={!pharmacyRegionId || pharmacyAvailableZones.length === 0}
+              >
+                <option value="">Зона танланг</option>
+                {pharmacyAvailableZones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+                {pharmacyRegionId && pharmacyAvailableZones.length === 0 && (
+                  <option value="">Бу регионга зона бириктирилмаган</option>
+                )}
+              </select>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
               <input type="text" placeholder="Счет-фактура №" value={pharmacyInvoice} onChange={(e) => setPharmacyInvoice(e.target.value)} style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
@@ -696,7 +947,7 @@ const Sales: React.FC = () => {
                 value=""
                 onChange={(e) => {
                   if (e.target.value) {
-                    const product = availableProducts.find(p => p.id === e.target.value);
+                    const product = products.find(p => p.id === e.target.value);
                     if (product) {
                       const existing = pharmacyProducts.find(p => p.productId === product.id);
                       if (existing) {
@@ -710,7 +961,7 @@ const Sales: React.FC = () => {
                 style={{ padding: '8px', border: '1px solid #ddd', borderRadius: '6px', flex: 1 }}
               >
                 <option value="">➕ Препарат қўшиш</option>
-                {availableProducts.filter(p => !pharmacyProducts.find(z => z.productId === p.id)).map(p => (
+                {products.map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({p.groupName})</option>
                 ))}
               </select>
@@ -737,7 +988,7 @@ const Sales: React.FC = () => {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ background: '#f8f9fa' }}>
-                  <tr><th>№</th><th>Аптека</th><th>ИНН</th><th>Вилоят</th><th>Туман</th><th>Ой</th><th>Препаратлар</th><th>Жами</th></tr>
+                  <tr><th>№</th><th>Аптека</th><th>ИНН</th><th>Регион</th><th>Зона</th><th>Ой</th><th>Препаратлар</th><th>Жами</th><th>Ҳаракат</th></tr>
                 </thead>
                 <tbody>
                   {pharmacySales.map((s, i) => (
@@ -745,8 +996,8 @@ const Sales: React.FC = () => {
                       <td style={{ padding: '8px 12px' }}>{i + 1}</td>
                       <td style={{ padding: '8px 12px' }}>{s.pharmacyName}</td>
                       <td style={{ padding: '8px 12px' }}>{s.inn || '-'}</td>
-                      <td style={{ padding: '8px 12px' }}>{s.region}</td>
-                      <td style={{ padding: '8px 12px' }}>{s.district}</td>
+                      <td style={{ padding: '8px 12px' }}>{s.regionName}</td>
+                      <td style={{ padding: '8px 12px' }}>{s.zoneName}</td>
                       <td style={{ padding: '8px 12px' }}>{s.month}</td>
                       <td style={{ padding: '8px 12px', fontSize: '13px' }}>
                         {s.products.map(p => {
@@ -755,6 +1006,7 @@ const Sales: React.FC = () => {
                         }).join(', ')}
                       </td>
                       <td style={{ padding: '8px 12px', fontWeight: 'bold' }}>{s.totalAmount.toLocaleString()} сўм</td>
+                      <td><button onClick={() => handleDeletePharmacySale(s.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button></td>
                     </tr>
                   ))}
                 </tbody>
