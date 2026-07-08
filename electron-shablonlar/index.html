@@ -1,0 +1,941 @@
+﻿<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Elektron Shablonlar - MedHelper</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; font-family: "Segoe UI", sans-serif; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        .login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000;
+            display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.8);
+        }
+        .login-box { background: white; padding: 40px; border-radius: 20px; text-align: center; width: 350px; }
+        .login-box h2 { color: #764ba2; margin-bottom: 15px; }
+        .login-box input { width: 100%; padding: 14px; font-size: 18px; text-align: center; letter-spacing: 5px; border: 2px solid #ddd; border-radius: 10px; margin-bottom: 15px; }
+        .login-box button { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; }
+        .error-msg { color: red; margin-top: 10px; min-height: 30px; }
+        
+        .main-app { display: none; }
+        .navbar {
+            background: white; padding: 15px 25px; border-radius: 20px; display: flex;
+            justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px;
+        }
+        .logo { font-size: 22px; font-weight: bold; color: #764ba2; }
+        .doctor-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .doctor-info .name { font-weight: bold; color: #333; }
+        .doctor-info .phone { color: #666; font-size: 14px; }
+        .doctor-info .region { color: #666; font-size: 14px; }
+        .doctor-info .speciality { color: #888; font-size: 13px; }
+        .logout-btn { padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        .profile-btn { padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        .history-btn { padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        
+        .action-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .btn-select-all { padding: 6px 14px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .btn-deselect-all { padding: 6px 14px; background: #dc3545; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .btn-print-all { padding: 6px 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        
+        .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .product-card {
+            background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: 0.3s; border: 2px solid transparent; position: relative;
+        }
+        .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        .product-card.selected { border-color: #28a745; background: #f0fff4; }
+        .product-card .name { font-size: 16px; font-weight: bold; color: #764ba2; margin-bottom: 6px; padding-left: 30px; }
+        .product-card .info { font-size: 12px; color: #888; margin-bottom: 4px; padding-left: 30px; }
+        .product-card .actions { display: flex; gap: 8px; margin-top: 12px; }
+        .product-card .actions button { flex: 1; padding: 8px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-print { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-add { background: #28a745; color: white; width: 40px; }
+        .btn-add.active { background: #dc3545; }
+        .product-card .badge { position: absolute; top: -8px; right: -8px; background: #28a745; color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .product-card .checkbox { position: absolute; top: 8px; left: 8px; width: 20px; height: 20px; cursor: pointer; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { color: #764ba2; }
+        .close-modal { background: none; border: none; font-size: 24px; cursor: pointer; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 500; margin-bottom: 5px; font-size: 13px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 10px; font-size: 14px; }
+        .modal-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        
+        .doctor-list-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .doctor-list-item:hover { background: #f0f0f0; }
+        .doctor-list-item.selected { background: #d4edda; border-left: 3px solid #28a745; }
+        .doctor-list-item .info { flex: 1; }
+        .doctor-list-item .name { font-weight: bold; }
+        .doctor-list-item .speciality { font-size: 12px; color: #888; }
+        
+        .selected-products-list { max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 15px; }
+        .selected-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+        .selected-item .remove { color: #dc3545; cursor: pointer; font-weight: bold; }
+        
+        .history-list { max-height: 300px; overflow-y: auto; }
+        .history-item { padding: 10px; border-bottom: 1px solid #eee; }
+        .history-item .date { font-size: 12px; color: #888; }
+        .history-item .drug { font-weight: bold; color: #764ba2; }
+        .history-item .status { font-size: 12px; padding: 2px 8px; border-radius: 12px; }
+        .history-item .status.active { background: #d4edda; color: #155724; }
+        .history-item .status.used { background: #cce5ff; color: #004085; }
+        
+        .toast { position: fixed; bottom: 30px; right: 30px; background: #28a745; color: white; padding: 12px 20px; border-radius: 10px; z-index: 1100; animation: slideIn 0.3s ease; }
+        .toast.error { background: #dc3545; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        .stats-info { display: flex; gap: 15px; flex-wrap: wrap; font-size: 13px; color: #888; }
+        .stats-info span { background: white; padding: 4px 12px; border-radius: 20px; }
+        .stats-info .count { font-weight: bold; color: #764ba2; }
+        
+        .patient-search { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .patient-search input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; flex: 1; min-width: 150px; }
+        .patient-search button { padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        
+        @media (max-width: 768px) { .products-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) { .navbar { flex-direction: column; align-items: stretch; } }
+    </style>
+</head>
+<body>
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-box">
+            <h2>🔐 Elektron Shablonlar</h2>
+            <p>MedHelper tizimi</p>
+            <input type="password" id="loginPassword" placeholder="****" maxlength="10">
+            <button id="loginBtn">Kirish</button>
+            <div class="error-msg" id="loginError"></div>
+        </div>
+    </div>
+
+    <div class="main-app" id="mainApp">
+        <div class="container">
+            <div class="navbar">
+                <div class="logo">📋 Elektron Shablonlar</div>
+                <div class="doctor-info">
+                    <span class="name">👨‍⚕️ <span id="doctorName">Tanlanmagan</span></span>
+                    <span class="phone">📞 <span id="doctorPhone">-</span></span>
+                    <span class="region">📍 <span id="doctorRegion">-</span></span>
+                    <span class="speciality">📋 <span id="doctorSpeciality">-</span></span>
+                    <button class="profile-btn" id="profileBtn">⚙️ Profil</button>
+                    <button class="history-btn" id="historyBtn">📋 Bemor tarixi</button>
+                    <button class="logout-btn" id="logoutBtn">🚪 Chiqish</button>
+                </div>
+            </div>
+            
+            <div style="background: white; border-radius: 15px; padding: 12px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div class="action-buttons">
+                    <button class="btn-select-all" onclick="selectAllProducts()">✅ Hammasini tanlash</button>
+                    <button class="btn-deselect-all" onclick="deselectAllProducts()">❌ Tanlovni olib tashlash</button>
+                    <button class="btn-print-all" onclick="printSelectedAll()">🖨️ Tanlanganlarni chop etish (<span id="selectedCount">0</span>)</button>
+                </div>
+                <div class="stats-info">
+                    <span>💊 <span class="count" id="totalProducts">0</span> ta preparat</span>
+                    <span>✅ <span class="count" id="selectedProductsCount">0</span> ta tanlangan</span>
+                </div>
+            </div>
+
+            <h2 style="color: white; margin-bottom: 15px;">💊 Preparatlar</h2>
+            <div class="products-grid" id="productsGrid">
+                <div style="grid-column:1/-1; text-align:center; padding:40px; color:white;">⏳ Yuklanmoqda...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROFILE MODAL -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Vrach tanlash</h3>
+                <button class="close-modal" id="closeProfileBtn">&times;</button>
+            </div>
+            <div id="profileStep1">
+                <div class="form-group"><label>🔐 Parol</label><input type="password" id="profilePassword" placeholder="Parolni kiriting"></div>
+                <button class="modal-btn" id="profilePasswordBtn">Tasdiqlash</button>
+                <div style="font-size:12px; color:#888; margin-top:10px;">* Parol: 2599767</div>
+            </div>
+            <div id="profileStep2" style="display:none;">
+                <div class="form-group"><label>📍 Viloyat</label><select id="editDoctorRegion"><option value="">-- Tanlang --</option></select></div>
+                <div class="form-group"><label>🏙️ Tuman</label><select id="editDoctorDistrict"><option value="">-- Avval viloyat tanlang --</option></select></div>
+                <div style="margin-bottom:15px;">
+                    <label style="display:block; font-weight:500; margin-bottom:8px; font-size:13px;">👨‍⚕️ Vrachlar</label>
+                    <div id="doctorList" style="max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:10px; padding:10px;">
+                        <div style="text-align:center; color:#999;">Viloyat va tumanni tanlang</div>
+                    </div>
+                </div>
+                <button class="modal-btn" id="saveDoctorBtn">💾 Saqlash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HISTORY MODAL -->
+    <div class="modal" id="historyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📋 Bemor tarixi</h3>
+                <button class="close-modal" id="closeHistoryBtn">&times;</button>
+            </div>
+            <div class="patient-search">
+                <input type="text" id="historyPhone" placeholder="📞 Bemor telefon raqami">
+                <button onclick="loadPatientHistory()">🔍 Qidirish</button>
+            </div>
+            <div id="historyList" style="margin-top:15px; max-height:400px; overflow-y:auto;">
+                <div style="text-align:center; color:#999; padding:20px;">Bemor telefon raqamini kiriting</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRINT MODAL -->
+    <div class="modal" id="printModal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🖨️ Retsept chop etish</h3>
+                <button class="close-modal" id="closePrintModal">&times;</button>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:14px; color:#666; margin-bottom:10px;">📋 Tanlangan preparatlar: <span id="printCount">0</span> ta</div>
+                <div class="selected-products-list" id="printProductList"></div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:12px; color:#888; margin-bottom:5px;">👤 Bemor ma'lumotlari (ixtiyoriy)</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <input type="text" id="patientName" placeholder="Bemor ismi" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+                    <input type="text" id="patientPhone" placeholder="📞 Telefon" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+                </div>
+                <input type="text" id="patientAge" placeholder="Yoshi" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; margin-top:8px;">
+                <div style="margin-top:8px; font-size:12px; color:#888;">
+                    💡 Telefon raqam kiritsangiz, bemor tarixi avtomatik saqlanadi
+                </div>
+            </div>
+            <button class="modal-btn" id="confirmPrintBtn" style="background:linear-gradient(135deg, #28a745 0%, #20c997 100%);">🖨️ Chop etish</button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script>
+        // ============ FIREBASE CONFIG ============
+        const firebaseConfig = {
+            apiKey: "AIzaSyA3L3LhvkAjvDIHzWgsl0fexRe8yqA5b00",
+            authDomain: "medhelper-crm.firebaseapp.com",
+            projectId: "medhelper-crm",
+            storageBucket: "medhelper-crm.firebasestorage.app",
+            messagingSenderId: "428276406189",
+            appId: "1:428276406189:web:f3613b6c9e6dc1601b7324"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ============ CONSTANTS ============
+        const UNIVERSAL_PASSWORD = "1997";
+        const CHANGE_PASSWORD = "2599767";
+
+        // ============ STATE ============
+        let doctor = null, templates = [], products = [], selectedProducts = [], allDoctors = [], selectedDoctorId = null;
+        let receiptTemplate = null;
+        let deviceId = localStorage.getItem("deviceId") || "DEV-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 7);
+        localStorage.setItem("deviceId", deviceId);
+
+        // ============ REGION-DISTRICT ============
+        const regionDistricts = {
+            "Toshkent shahri": ["Yashnobod","Mirzo Ulugbek","Olmazor","Bektemir","Chilonzor","Uchtepa","Sergeli","Yakkasaroy","Shayxontohur","Mirobod"],
+            "Toshkent viloyati": ["Bekobod","Buka","Bustonlik","Zangiota","Qibray","Ohangaron","Oqqorgon","Parkent","Piskent","Chirchiq","Yangiyol"],
+            "Samarqand viloyati": ["Samarqand sh.","Bulungur","Jomboy","Ishtixon","Kattaqorgon","Narpay","Oqdaryo","Payariq","Pastdargom","Urgut"],
+            "Buxoro viloyati": ["Buxoro sh.","Jondor","Kogon","Qorakol","Olot","Peshku","Romitan","Shofirkon","Vobkent","Gijduvon"],
+            "Namangan viloyati": ["Namangan sh.","Kosonsoy","Mingbuloq","Norin","Pop","Toraqorgon","Uychi","Uchqorgon","Chortoq","Chust"],
+            "Fargona viloyati": ["Fargona sh.","Oltiariq","Beshariq","Buvaydi","Dangara","Qoshtepa","Quva","Quvasoy","Margilon","Rishton","Sox","Toshloq","Uchkoprik","Yozyovon"],
+            "Andijon viloyati": ["Andijon sh.","Asaka","Baliqchi","Buz","Izboskan","Jalalkuduk","Marhamat","Oltinkol","Paxtaobod","Shahrixon"],
+            "Qashqadaryo viloyati": ["Qarshi sh.","Shahrisabz","Guzor","Dehqonobod","Kamashi","Kasbi","Kitob","Mirishkor","Muborak","Nishon","Chiroqchi","Yakkabog"],
+            "Surxondaryo viloyati": ["Termiz sh.","Angor","Boysun","Denov","Jarqorgon","Qiziriq","Qumqorgon","Muzrabot","Oltinsoy","Sariosiyo","Uzun","Sherobod","Shurchi"],
+            "Navoiy viloyati": ["Navoiy sh.","Zarafshon","Qiziltepa","Navbahor","Nurata","Tomdi","Uchquduq","Xatirchi"],
+            "Xorazm viloyati": ["Urganch sh.","Bogot","Gurlan","Qoshkopir","Qushkopir","Toshovul","Xiva","Xonqa","Shovot","Yangiariq","Yangibozor"],
+            "Jizzax viloyati": ["Jizzax sh.","Arnasoy","Baxmal","Gallaorol","Do'stlik","Zomin","Zarbdor","Zafarobod","Mirzachul","Paxtakor","Yangiobod"],
+            "Sirdaryo viloyati": ["Guliston sh.","Boyovut","Mirzaobod","Oqoltin","Sardoba","Sayxunobod","Sirdaryo","Xovos"],
+            "Qoraqalpogiston": ["Nukus sh.","Amudaryo","Beruniy","Kegeyli","QaraozeK","Qonlikol","Qongirot","Moynoq","Taxtakopir","Turtkul","Xojayli","Chimboy","Shumanay","Ellikqala"]
+        };
+
+        // ============ LOGIN ============
+        document.getElementById("loginBtn").onclick = function() {
+            if (document.getElementById("loginPassword").value === UNIVERSAL_PASSWORD) {
+                document.getElementById("loginOverlay").style.display = "none";
+                document.getElementById("mainApp").style.display = "block";
+                loadDoctors();
+                checkAutoLogin();
+            } else {
+                document.getElementById("loginError").textContent = "❌ Parol noto'g'ri!";
+            }
+        };
+
+        document.getElementById("loginPassword").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") document.getElementById("loginBtn").click();
+        });
+
+        // ============ LOAD DOCTORS ============
+        async function loadDoctors() {
+            try {
+                const snapshot = await db.collection("doctors").where("isActive", "==", true).get();
+                allDoctors = [];
+                snapshot.forEach(doc => allDoctors.push({ id: doc.id, ...doc.data() }));
+                const saved = localStorage.getItem("doctor_id");
+                if (saved) {
+                    const found = allDoctors.find(d => d.id === saved);
+                    if (found) { doctor = found; updateDoctorDisplay(); loadData(); return; }
+                }
+                setTimeout(function() { document.getElementById("profileBtn").click(); }, 500);
+            } catch (error) { console.error(error); }
+        }
+
+        function updateDoctorDisplay() {
+            if (doctor) {
+                document.getElementById("doctorName").textContent = doctor.name || "Vrach";
+                document.getElementById("doctorPhone").textContent = doctor.phone || "";
+                document.getElementById("doctorRegion").textContent = doctor.region || "";
+                document.getElementById("doctorSpeciality").textContent = doctor.speciality || "";
+            }
+        }
+
+        // ============ LOAD DATA ============
+        async function loadData() {
+            await loadProducts();
+            await loadTemplates();
+            await loadReceiptTemplate();
+        }
+
+        async function loadProducts() {
+            try {
+                const snapshot = await db.collection("products").where("isActive", "==", true).get();
+                products = [];
+                snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
+                renderProducts();
+                updateStats();
+            } catch (error) { console.error(error); }
+        }
+
+        async function loadTemplates() {
+            if (!doctor || !doctor.speciality) { renderProducts(); return; }
+            try {
+                const snapshot = await db.collection("templates").where("specialities", "array-contains", doctor.speciality).where("isActive", "==", true).get();
+                templates = [];
+                snapshot.forEach(doc => templates.push({ id: doc.id, ...doc.data() }));
+                renderProducts();
+            } catch (error) { console.error(error); }
+        }
+
+        // ============ LOAD RECEIPT TEMPLATE ============
+        async function loadReceiptTemplate() {
+            try {
+                const snapshot = await db.collection("receiptTemplates")
+                    .where("isActive", "==", true)
+                    .limit(1)
+                    .get();
+                
+                if (!snapshot.empty) {
+                    const doc = snapshot.docs[0];
+                    receiptTemplate = { id: doc.id, ...doc.data() };
+                    console.log("✅ Retsept shabloni yuklandi:", receiptTemplate.name);
+                    return receiptTemplate;
+                }
+            } catch (error) {
+                console.error("❌ Shablon yuklash xatolik:", error);
+            }
+            
+            // Default template
+            receiptTemplate = {
+                name: "Standart",
+                isActive: true,
+                showHeader: true,
+                showSubHeader: true,
+                showQRCode: true,
+                showTitle: true,
+                showReceiptNumber: true,
+                showDate: true,
+                showPatient: true,
+                showDoctor: true,
+                showDoctorPhone: true,
+                showDoctorRegion: true,
+                showDrugName: true,
+                showDrugTarkibi: true,
+                showDrugDoza: true,
+                showDrugMiqdori: true,
+                showDrugQabul: true,
+                showDrugIzoh: true,
+                showDrugQollanishi: true,
+                showProductPrice: true,
+                showProductPackaging: true,
+                showProductBarcode: true,
+                showStatus: true,
+                showMuddat: true,
+                showFooter: true,
+                header: "🏥 MedHelper",
+                subHeader: "Электрон рецепт тизими",
+                title: "Оддий Электрон Рецепт",
+                footer: "* Бу рецепт фақат БАД учун *\nMedHelper электрон тизими",
+                fontSize: 14,
+                fontFamily: "Courier New",
+                status: "active",
+                qrCodeText: "",
+                customFields: []
+            };
+            return receiptTemplate;
+        }
+
+        // ============ GET VISIBLE PRODUCTS ============
+        function getVisibleProducts() {
+            var ids = new Set();
+            templates.forEach(function(t) { (t.productIds || []).forEach(function(id) { ids.add(id); }); });
+            return products.filter(function(p) { return ids.has(p.id); });
+        }
+
+        // ============ RENDER PRODUCTS ============
+        function renderProducts() {
+            var grid = document.getElementById("productsGrid");
+            var visible = getVisibleProducts();
+            if (visible.length === 0) {
+                grid.innerHTML = "<div style='grid-column:1/-1; text-align:center; padding:40px; background:white; border-radius:20px; color:#999;'>📭 Sizga mos preparatlar mavjud emas</div>";
+                return;
+            }
+            grid.innerHTML = "";
+            visible.forEach(function(p) {
+                var isSelected = selectedProducts.some(function(sp) { return sp.id === p.id; });
+                var card = document.createElement("div");
+                card.className = "product-card" + (isSelected ? " selected" : "");
+                card.innerHTML = '<input type="checkbox" class="checkbox" ' + (isSelected ? 'checked' : '') + ' onclick="toggleSelect(\'' + p.id + '\')"><div class="name" style="padding-left:30px;">💊 ' + p.name + '</div><div class="info" style="padding-left:30px;">' + (p.tarkibi || "") + ' ' + (p.miqdori || "") + '</div><div class="info" style="padding-left:30px;">⚡ ' + (p.doza || "") + ' | 🕐 ' + (p.qabul || "") + '</div>' + (isSelected ? '<div class="badge">✅ Tanlangan</div>' : '') + '<div class="actions"><button class="btn-print" onclick="printSingle(\'' + p.id + '\')">🖨️ Chop etish</button><button class="btn-add ' + (isSelected ? 'active' : '') + '" onclick="toggleSelect(\'' + p.id + '\')">' + (isSelected ? '✖' : '+') + '</button></div>';
+                grid.appendChild(card);
+            });
+            updateStats();
+        }
+
+        // ============ TOGGLE SELECT ============
+        function toggleSelect(id) {
+            var p = products.find(function(x) { return x.id === id; });
+            if (!p) return;
+            var idx = selectedProducts.findIndex(function(x) { return x.id === id; });
+            if (idx > -1) { selectedProducts.splice(idx, 1); } else { selectedProducts.push(p); }
+            renderProducts();
+            updateStats();
+        }
+
+        // ============ SELECT ALL / DESELECT ALL ============
+        function selectAllProducts() {
+            var visible = getVisibleProducts();
+            visible.forEach(function(p) {
+                if (!selectedProducts.some(function(sp) { return sp.id === p.id; })) {
+                    selectedProducts.push(p);
+                }
+            });
+            renderProducts();
+            updateStats();
+            showToast("✅ Barcha preparatlar tanlandi!");
+        }
+
+        function deselectAllProducts() {
+            selectedProducts = [];
+            renderProducts();
+            updateStats();
+            showToast("❌ Barcha tanlovlar olib tashlandi!");
+        }
+
+        function printSelectedAll() {
+            if (selectedProducts.length === 0) {
+                showToast("⚠️ Hech qanday preparat tanlanmagan!", true);
+                return;
+            }
+            showPrintModal();
+        }
+
+        function printSingle(id) {
+            var p = products.find(function(x) { return x.id === id; });
+            if (!p) return;
+            selectedProducts = [p];
+            showPrintModal();
+        }
+
+        // ============ UPDATE STATS ============
+        function updateStats() {
+            document.getElementById("selectedCount").textContent = selectedProducts.length;
+            document.getElementById("selectedProductsCount").textContent = selectedProducts.length;
+            document.getElementById("totalProducts").textContent = getVisibleProducts().length;
+        }
+
+        // ============ SAVE PATIENT ============
+        async function savePatient(patientData) {
+            try {
+                var q = db.collection("patients")
+                    .where("phone", "==", patientData.phone)
+                    .where("doctorId", "==", doctor.id);
+                var snapshot = await q.get();
+                
+                if (!snapshot.empty) {
+                    var docRef = snapshot.docs[0].ref;
+                    await docRef.update({
+                        name: patientData.name,
+                        age: patientData.age,
+                        updatedAt: new Date(),
+                        history: firebase.firestore.FieldValue.arrayUnion({
+                            date: new Date(),
+                            prescription: patientData.drugName,
+                            receiptNumber: patientData.receiptNumber,
+                            status: "active"
+                        })
+                    });
+                    return snapshot.docs[0].id;
+                } else {
+                    var docRef = await db.collection("patients").add({
+                        name: patientData.name,
+                        phone: patientData.phone,
+                        age: patientData.age,
+                        doctorId: doctor.id,
+                        doctorName: doctor.name,
+                        history: [{
+                            date: new Date(),
+                            prescription: patientData.drugName,
+                            receiptNumber: patientData.receiptNumber,
+                            status: "active"
+                        }],
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    });
+                    return docRef.id;
+                }
+            } catch (error) {
+                console.error("❌ Patient saqlash xatolik:", error);
+                return null;
+            }
+        }
+
+        // ============ LOAD PATIENT HISTORY ============
+        async function loadPatientHistory() {
+            var phone = document.getElementById("historyPhone").value.trim();
+            if (!phone) {
+                showToast("❌ Telefon raqamni kiriting!", true);
+                return;
+            }
+
+            try {
+                var q = db.collection("patients")
+                    .where("phone", "==", phone)
+                    .where("doctorId", "==", doctor.id);
+                var snapshot = await q.get();
+                var list = document.getElementById("historyList");
+                
+                if (snapshot.empty) {
+                    list.innerHTML = "<div style='text-align:center; color:#999; padding:20px;'>📭 Bu bemor uchun hech qanday tarix mavjud emas</div>";
+                    return;
+                }
+
+                var data = snapshot.docs[0].data();
+                var history = data.history || [];
+                
+                if (history.length === 0) {
+                    list.innerHTML = "<div style='text-align:center; color:#999; padding:20px;'>📭 Hech qanday retsept yo'q</div>";
+                    return;
+                }
+
+                list.innerHTML = "<div style='margin-bottom:10px;'><strong>👤 " + data.name + "</strong> | 📞 " + data.phone + " | 🎂 " + (data.age || "-") + "</div>";
+                list.innerHTML += "<div class='history-list'>";
+                history.reverse().forEach(function(item, index) {
+                    var statusClass = item.status === "active" ? "active" : "used";
+                    var statusText = item.status === "active" ? "🟢 Faol" : "🔵 Ishlatilgan";
+                    list.innerHTML += '<div class="history-item"><div class="date">' + new Date(item.date).toLocaleDateString("uz-UZ") + '</div><div class="drug">💊 ' + item.prescription + '</div><div>📋 ' + item.receiptNumber + '</div><span class="status ' + statusClass + '">' + statusText + '</span></div>';
+                });
+                list.innerHTML += "</div>";
+            } catch (error) {
+                console.error("❌ History yuklash xatolik:", error);
+                showToast("❌ Xatolik!", true);
+            }
+        }
+
+        // ============ SHOW PRINT MODAL ============
+        function showPrintModal() {
+            if (selectedProducts.length === 0) {
+                showToast("Hech qanday preparat tanlanmagan!", true);
+                return;
+            }
+            document.getElementById("printModal").style.display = "flex";
+            document.getElementById("printCount").textContent = selectedProducts.length;
+            var list = document.getElementById("printProductList");
+            list.innerHTML = selectedProducts.map(function(p, i) {
+                return '<div class="selected-item"><span>' + (i+1) + '. ' + p.name + '</span><span class="remove" onclick="removeFromSelected(\'' + p.id + '\')">✖</span></div>';
+            }).join("");
+            document.getElementById("patientName").value = "";
+            document.getElementById("patientPhone").value = "";
+            document.getElementById("patientAge").value = "";
+        }
+
+        function removeFromSelected(id) {
+            selectedProducts = selectedProducts.filter(function(p) { return p.id !== id; });
+            if (selectedProducts.length === 0) {
+                document.getElementById("printModal").style.display = "none";
+            } else {
+                showPrintModal();
+            }
+            renderProducts();
+            updateStats();
+        }
+
+        // ============ GET RECEIPT HTML (TO'G'RI KO'RINISH) ============
+        function getReceiptHTML(productsList, receiptNumber, patientName) {
+            var t = receiptTemplate || {
+                name: "Standart",
+                showHeader: true,
+                showSubHeader: true,
+                showQRCode: true,
+                showTitle: true,
+                showReceiptNumber: true,
+                showDate: true,
+                showPatient: true,
+                showDoctor: true,
+                showDoctorPhone: true,
+                showDoctorRegion: true,
+                showDrugName: true,
+                showDrugTarkibi: true,
+                showDrugDoza: true,
+                showDrugMiqdori: true,
+                showDrugQabul: true,
+                showDrugIzoh: true,
+                showDrugQollanishi: true,
+                showProductPrice: true,
+                showProductPackaging: true,
+                showProductBarcode: true,
+                showStatus: true,
+                showMuddat: true,
+                showFooter: true,
+                header: "🏥 MedHelper",
+                subHeader: "Электрон рецепт тизими",
+                title: "Оддий Электрон Рецепт",
+                footer: "* Бу рецепт фақат БАД учун *\nMedHelper электрон тизими",
+                fontSize: 14,
+                fontFamily: "Courier New"
+            };
+
+            var phone = doctor.phone || "";
+            if (phone && phone.length === 12 && phone.startsWith("998")) {
+                phone = "+" + phone.substring(0,3) + " " + phone.substring(3,5) + " " + 
+                        phone.substring(5,8) + " " + phone.substring(8,10) + " " + phone.substring(10,12);
+            }
+
+            // Preparatlar HTML - kerakli ko'rinishda
+            var drugsHtml = "";
+            for (var i = 0; i < productsList.length; i++) {
+                var p = productsList[i];
+                if (i > 0) drugsHtml += '<div class="divider" style="margin:6px 0;"></div>';
+                
+                if (t.showDrugName !== false) {
+                    drugsHtml += '<div class="row" style="margin-top:4px;"><span class="label">' + (i+1) + '. 💊 Препарат:</span> ' + p.name + '</div>';
+                }
+                if (t.showDrugTarkibi !== false && p.tarkibi) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">таркиби:</span> ' + p.tarkibi + '</div>';
+                }
+                if (t.showDrugDoza !== false && p.doza) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">⚡ Дозаси:</span> ' + p.doza + '</div>';
+                }
+                if (t.showDrugMiqdori !== false && p.miqdori) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">📦 Миқдори:</span> ' + p.miqdori + '</div>';
+                }
+                if (t.showDrugQabul !== false && p.qabul) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">🕐 Қабул:</span> ' + p.qabul + '</div>';
+                }
+                if (t.showDrugIzoh !== false && p.izoh) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">📝 Изоҳ:</span> ' + p.izoh + '</div>';
+                }
+                if (t.showDrugQollanishi !== false && p.qollanishi) {
+                    drugsHtml += '<div class="qollanishi" style="padding-left:20px; font-size:11px; white-space:pre-line;"><span class="label">📋 Қўлланиши:</span>\n' + p.qollanishi + '</div>';
+                }
+                if (t.showProductPrice !== false && p.price) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">💰 Нархи:</span> ' + Number(p.price).toLocaleString() + ' сўм</div>';
+                }
+                if (t.showProductPackaging !== false && p.packaging) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">📦 Қадоқ:</span> ' + p.packaging + '</div>';
+                }
+                if (t.showProductBarcode !== false && p.barcode) {
+                    drugsHtml += '<div class="row" style="padding-left:20px; font-size:11px;"><span class="label">🔢 Штрих код:</span> ' + p.barcode + '</div>';
+                }
+            }
+
+            // Bemor HTML
+            var patientHtml = "";
+            if (t.showPatient !== false && patientName) {
+                patientHtml = '<div class="row"><span class="label">👤 Бемор:</span> ' + patientName + '</div>';
+            }
+
+            // Vrach HTML
+            var doctorHtml = "";
+            if (t.showDoctor !== false) {
+                doctorHtml += '<div class="row"><span class="label">👨‍⚕️ Шифокор:</span> ' + (doctor.name || "Аниқланмаган") + '</div>';
+            }
+            if (t.showDoctorPhone !== false && doctor.phone) {
+                doctorHtml += '<div class="row"><span class="label">📞 Телефон:</span> ' + phone + '</div>';
+            }
+            if (t.showDoctorRegion !== false && doctor.region) {
+                var regionText = doctor.region || "";
+                if (doctor.district) regionText += ", " + doctor.district;
+                doctorHtml += '<div class="row"><span class="label">📍 Манзил:</span> ' + regionText + '</div>';
+            }
+
+            // Status HTML
+            var statusHtml = "";
+            if (t.showStatus !== false) {
+                statusHtml = '<div class="row"><span class="label">✅ Ҳолат:</span> <span class="status">Фаол</span></div>';
+            }
+            if (t.showMuddat !== false) {
+                statusHtml += '<div class="row"><span class="label">Муддат:</span> 30 кун</div>';
+            }
+
+            var footerText = t.footer || "* Бу рецепт фақат БАД учун *\nMedHelper электрон тизими";
+
+            return '<!DOCTYPE html>\n<html>\n<head>\n    <meta charset="UTF-8">\n    <title>MedHelper - Retsept</title>\n    <style>\n        @page { size: 58mm auto; margin: 0; }\n        * { margin: 0; padding: 0; box-sizing: border-box; }\n        body {\n            font-family: "' + (t.fontFamily || "Courier New") + '", monospace;\n            width: 58mm;\n            margin: 0 auto;\n            padding: 8px 4px;\n            background: white;\n            font-size: ' + (t.fontSize || 14) + 'px;\n            line-height: 1.25;\n        }\n        .receipt { text-align: center; }\n        .header { font-size: ' + ((t.fontSize || 14) + 4) + 'px; font-weight: bold; letter-spacing: 2px; margin-bottom: 2px; }\n        .sub-header { font-size: ' + ((t.fontSize || 14) - 1) + 'px; margin-bottom: 5px; }\n        .qr-container { text-align: center; margin: 8px 0; }\n        .title { font-size: ' + ((t.fontSize || 14) + 1) + 'px; font-weight: bold; margin: 8px 0; padding: 3px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }\n        .content { text-align: left; margin: 8px 0; }\n        .row { margin: 3px 0; }\n        .label { font-weight: bold; }\n        .divider { border-top: 1px dashed #000; margin: 6px 0; }\n        .qollanishi { margin: 4px 0; padding: 4px; background: #f9f9f9; border-radius: 4px; white-space: pre-line; }\n        .footer { font-size: ' + ((t.fontSize || 14) - 3) + 'px; margin-top: 6px; border-top: 1px dashed #000; padding-top: 4px; color: #666; white-space: pre-line; }\n        .status { color: #28a745; font-weight: bold; }\n    <\/style>\n    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>\n</head>\n<body>\n    <div class="receipt">\n        ' + (t.showHeader !== false ? '<div class="header">' + (t.header || "🏥 MedHelper") + '</div>' : "") + '\n        ' + (t.showSubHeader !== false ? '<div class="sub-header">' + (t.subHeader || "Электрон рецепт тизими") + '</div>' : "") + '\n        ' + (t.showQRCode !== false ? '<div class="qr-container" id="qrcode"></div>' : "") + '\n        ' + (t.showTitle !== false ? '<div class="title">' + (t.title || "Оддий Электрон Рецепт") + '</div>' : "") + '\n        <div class="content">\n            ' + (t.showReceiptNumber !== false ? '<div class="row"><span class="label">Рецепт №:</span> ' + receiptNumber + '</div>' : "") + '\n            ' + (t.showDate !== false ? '<div class="row"><span class="label">Сана:</span> ' + new Date().toLocaleString("uz-UZ") + '</div>' : "") + '\n            ' + patientHtml + '\n            ' + (drugsHtml ? '<div class="divider"></div>' : "") + '\n            ' + drugsHtml + '\n            ' + (statusHtml ? '<div class="divider"></div>' : "") + '\n            ' + statusHtml + '\n            ' + (doctorHtml ? '<div class="divider"></div>' : "") + '\n            ' + doctorHtml + '\n        </div>\n        ' + (t.showFooter !== false ? '<div class="footer">' + footerText + '</div>' : "") + '\n    </div>\n    <script>\n        ' + (t.showQRCode !== false ? 'new QRCode(document.getElementById("qrcode"), { text: "' + receiptNumber + '", width: 120, height: 120 });' : "") + '\n        window.onload = function() {\n            setTimeout(function() { window.print(); }, 300);\n        };\n    <\/script>\n</body>\n</html>';
+        }
+
+        // ============ CONFIRM PRINT ============
+        async function confirmPrint() {
+            if (selectedProducts.length === 0) {
+                showToast("Hech qanday preparat tanlanmagan!", true);
+                return;
+            }
+
+            var name = document.getElementById("patientName").value.trim();
+            var phone = document.getElementById("patientPhone").value.trim();
+            var age = document.getElementById("patientAge").value.trim();
+            var now = new Date();
+            var rn = "RX" + now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0');
+
+            try {
+                var patientId = null;
+                if (phone) {
+                    var patientData = {
+                        name: name || "Noma'lum",
+                        phone: phone,
+                        age: age || "",
+                        drugName: selectedProducts.map(function(p) { return p.name; }).join(", "),
+                        receiptNumber: rn
+                    };
+                    patientId = await savePatient(patientData);
+                }
+
+                var prescriptionIds = [];
+                for (var i = 0; i < selectedProducts.length; i++) {
+                    var p = selectedProducts[i];
+                    var docRef = await db.collection("prescriptions").add({
+                        doctorId: doctor.id,
+                        doctorName: doctor.name,
+                        doctorPhone: doctor.phone,
+                        doctorRegion: doctor.region,
+                        doctorDistrict: doctor.district,
+                        doctorSpeciality: doctor.speciality,
+                        patientName: name,
+                        patientPhone: phone,
+                        patientAge: age,
+                        patientId: patientId,
+                        drugName: p.name,
+                        drugTarkibi: p.tarkibi || "",
+                        drugDoza: p.doza || "",
+                        drugMiqdori: p.miqdori || "",
+                        drugQabul: p.qabul || "",
+                        drugIzoh: p.izoh || "",
+                        drugQollanishi: p.qollanishi || "",
+                        drugBarcode: p.barcode || "",
+                        receiptNumber: rn,
+                        printedAt: new Date(),
+                        status: "active",
+                        isPrinted: false,
+                        printStatus: "pending",
+                        printCount: 0,
+                        source: "electron-shablonlar",
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    prescriptionIds.push(docRef.id);
+                }
+
+                var win = window.open("", "_blank", "width=450,height=700");
+                if (win) {
+                    var html = getReceiptHTML(selectedProducts, rn, name);
+                    win.document.write(html);
+                    win.document.close();
+
+                    win.onafterprint = async function() {
+                        for (var j = 0; j < prescriptionIds.length; j++) {
+                            await db.collection("prescriptions").doc(prescriptionIds[j]).update({
+                                isPrinted: true,
+                                printStatus: "success",
+                                printCount: firebase.firestore.FieldValue.increment(1),
+                                printedAt: new Date()
+                            });
+                        }
+                        showToast("✅ Retsept chop etildi!");
+                    };
+
+                    setTimeout(async function() {
+                        if (!win.closed) {
+                            for (var k = 0; k < prescriptionIds.length; k++) {
+                                await db.collection("prescriptions").doc(prescriptionIds[k]).update({
+                                    printStatus: "failed",
+                                    printError: "Chop etish bekor qilindi yoki printerda xatolik"
+                                });
+                            }
+                            win.close();
+                        }
+                    }, 30000);
+                }
+
+                document.getElementById("printModal").style.display = "none";
+                selectedProducts = [];
+                showToast("🖨️ Retsept chop etilmoqda...");
+                renderProducts();
+                updateStats();
+            } catch (error) {
+                console.error("Print error:", error);
+                showToast("❌ Xatolik!", true);
+            }
+        }
+
+        // ============ PROFILE ============
+        document.getElementById("profileBtn").onclick = function() {
+            document.getElementById("profileModal").style.display = "flex";
+            document.getElementById("profileStep1").style.display = "block";
+            document.getElementById("profileStep2").style.display = "none";
+            document.getElementById("profilePassword").value = "";
+            populateRegions();
+        };
+
+        document.getElementById("closeProfileBtn").onclick = function() {
+            document.getElementById("profileModal").style.display = "none";
+        };
+
+        document.getElementById("profilePasswordBtn").onclick = function() {
+            if (document.getElementById("profilePassword").value === CHANGE_PASSWORD) {
+                document.getElementById("profileStep1").style.display = "none";
+                document.getElementById("profileStep2").style.display = "block";
+                populateDoctors();
+            } else {
+                showToast("❌ Parol noto'g'ri!", true);
+            }
+        };
+
+        function populateRegions() {
+            var s = document.getElementById("editDoctorRegion");
+            s.innerHTML = '<option value="">-- Tanlang --</option>';
+            Object.keys(regionDistricts).forEach(function(r) {
+                var o = document.createElement("option");
+                o.value = r; o.textContent = r; s.appendChild(o);
+            });
+            s.onchange = function() {
+                var d = document.getElementById("editDoctorDistrict");
+                d.innerHTML = '<option value="">-- Tanlang --</option>';
+                var districts = regionDistricts[this.value] || [];
+                districts.forEach(function(t) {
+                    var o = document.createElement("option");
+                    o.value = t; o.textContent = t; d.appendChild(o);
+                });
+                populateDoctors();
+            };
+            document.getElementById("editDoctorDistrict").onchange = function() {
+                populateDoctors();
+            };
+        }
+
+        function populateDoctors() {
+            var region = document.getElementById("editDoctorRegion").value;
+            var district = document.getElementById("editDoctorDistrict").value;
+            var list = document.getElementById("doctorList");
+            if (!region || !district) {
+                list.innerHTML = '<div style="padding:15px;text-align:center;color:#999;">Viloyat va tumanni tanlang</div>';
+                return;
+            }
+            var filtered = allDoctors.filter(function(d) { return d.region === region && d.district === district && d.isActive; });
+            if (filtered.length === 0) {
+                list.innerHTML = '<div style="padding:15px;text-align:center;color:#999;">Bu hududda faol vrachlar mavjud emas</div>';
+                return;
+            }
+            list.innerHTML = "";
+            filtered.forEach(function(d) {
+                var div = document.createElement("div");
+                div.className = "doctor-list-item" + (selectedDoctorId === d.id ? " selected" : "");
+                div.innerHTML = '<div class="info"><div class="name">' + d.name + '</div><div class="speciality">' + d.speciality + ' | 📞 ' + d.phone + '</div></div><span style="font-size:20px;">' + (selectedDoctorId === d.id ? '✅' : '○') + '</span>';
+                div.onclick = function() {
+                    selectedDoctorId = d.id;
+                    populateDoctors();
+                };
+                list.appendChild(div);
+            });
+        }
+
+        document.getElementById("saveDoctorBtn").onclick = async function() {
+            if (!selectedDoctorId) { showToast("❌ Vrachni tanlang!", true); return; }
+            var selected = allDoctors.find(function(d) { return d.id === selectedDoctorId; });
+            if (!selected) { showToast("❌ Vrach topilmadi!", true); return; }
+            doctor = selected;
+            localStorage.setItem("doctor_id", doctor.id);
+            localStorage.setItem("doctor_name", doctor.name);
+            localStorage.setItem("doctor_phone", doctor.phone);
+            localStorage.setItem("doctor_region", doctor.region);
+            localStorage.setItem("doctor_district", doctor.district);
+            localStorage.setItem("doctor_speciality", doctor.speciality);
+            localStorage.setItem("auto_login", "true");
+            updateDoctorDisplay();
+            document.getElementById("profileModal").style.display = "none";
+            showToast("✅ Vrach tanlandi!");
+            loadData();
+        };
+
+        // ============ HISTORY ============
+        document.getElementById("historyBtn").onclick = function() {
+            document.getElementById("historyModal").style.display = "flex";
+            document.getElementById("historyPhone").value = "";
+            document.getElementById("historyList").innerHTML = '<div style="text-align:center; color:#999; padding:20px;">Bemor telefon raqamini kiriting</div>';
+        };
+
+        document.getElementById("closeHistoryBtn").onclick = function() {
+            document.getElementById("historyModal").style.display = "none";
+        };
+
+        document.getElementById("historyPhone").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") loadPatientHistory();
+        });
+
+        // ============ LOGOUT ============
+        document.getElementById("logoutBtn").onclick = function() {
+            localStorage.clear();
+            document.getElementById("loginOverlay").style.display = "flex";
+            document.getElementById("mainApp").style.display = "none";
+            document.getElementById("loginPassword").value = "";
+        };
+
+        // ============ TOAST ============
+        function showToast(msg, isError) {
+            isError = isError || false;
+            var t = document.createElement("div");
+            t.className = "toast" + (isError ? " error" : "");
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(function() { t.remove(); }, 3000);
+        }
+
+        // ============ AUTO LOGIN ============
+        function checkAutoLogin() {
+            var saved = localStorage.getItem("doctor_id");
+            if (saved) {
+                var found = allDoctors.find(function(d) { return d.id === saved; });
+                if (found) { doctor = found; updateDoctorDisplay(); loadData(); }
+            }
+        }
+
+        document.getElementById("closePrintModal").onclick = function() {
+            document.getElementById("printModal").style.display = "none";
+        };
+
+        document.getElementById("confirmPrintBtn").onclick = confirmPrint;
+
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") {
+                document.querySelectorAll(".modal").forEach(function(m) { m.style.display = "none"; });
+            }
+        });
+
+        console.log("📋 Elektron Shablonlar App v3.0 - To'g'ri retsept ko'rinishi!");
+    </script>
+</body>
+</html>
