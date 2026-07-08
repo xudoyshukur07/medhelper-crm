@@ -5,7 +5,6 @@ import { db, auth } from '../firebase/config';
 import {
   collection,
   addDoc,
-  getDocs,
   deleteDoc,
   doc,
   updateDoc,
@@ -15,6 +14,7 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
+import ColumnSelector from '../components/ColumnSelector';
 
 interface Product {
   id: string;
@@ -35,6 +35,12 @@ interface Product {
   userId: string;
   createdAt: any;
   updatedAt?: any;
+  tarkibi?: string;
+  doza?: string;
+  miqdori?: string;
+  qabul?: string;
+  izoh?: string;
+  qollanishi?: string;
 }
 
 interface ProductGroup {
@@ -42,6 +48,26 @@ interface ProductGroup {
   name: string;
   isActive: boolean;
 }
+
+const ALL_COLUMNS = [
+  { key: 'index', label: '№', defaultVisible: true },
+  { key: 'name', label: '💊 Номи', defaultVisible: true },
+  { key: 'group', label: '📂 Гуруҳ', defaultVisible: true },
+  { key: 'tarkibi', label: '🧪 Таркиби', defaultVisible: true },
+  { key: 'doza', label: '⚡ Доза', defaultVisible: true },
+  { key: 'miqdori', label: '📦 Миқдори', defaultVisible: true },
+  { key: 'qabul', label: '🕐 Қабул', defaultVisible: false },
+  { key: 'izoh', label: '📝 Изоҳ', defaultVisible: false },
+  { key: 'qollanishi', label: '📋 Қўлланиши', defaultVisible: true },
+  { key: 'barcode', label: '🔢 Barcode', defaultVisible: true },
+  { key: 'price', label: '💰 Нархи', defaultVisible: true },
+  { key: 'commission', label: '💳 Комиссия', defaultVisible: false },
+  { key: 'packaging', label: '📦 Қадоқ', defaultVisible: false },
+  { key: 'sales', label: '📊 Сотувлар', defaultVisible: false },
+  { key: 'ai', label: '🤖 AI рейтинг', defaultVisible: false },
+  { key: 'status', label: '🔘 Ҳолат', defaultVisible: true },
+  { key: 'actions', label: '⚙️ Ҳаракатлар', defaultVisible: true }
+];
 
 const Products: React.FC = () => {
   const { user } = useAuth();
@@ -54,8 +80,22 @@ const Products: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
-  const [importLoading, setImportLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [columns, setColumns] = useState(() => {
+    const saved = localStorage.getItem('productColumns');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return ALL_COLUMNS.map(col => ({
+          ...col,
+          visible: parsed[col.key] !== undefined ? parsed[col.key] : col.defaultVisible
+        }));
+      } catch {
+        return ALL_COLUMNS.map(col => ({ ...col, visible: col.defaultVisible }));
+      }
+    }
+    return ALL_COLUMNS.map(col => ({ ...col, visible: col.defaultVisible }));
+  });
 
   const canManageProducts = user?.role === 'superadmin' || user?.role === 'seo' || user?.role === 'pm' || user?.role === 'ffm';
 
@@ -70,8 +110,46 @@ const Products: React.FC = () => {
     commissionAmount: 0,
     usage: '',
     description: '',
-    isActive: true
+    isActive: true,
+    tarkibi: '',
+    doza: '',
+    miqdori: '',
+    qabul: '',
+    izoh: '',
+    qollanishi: ''
   });
+
+  const handleToggleColumn = (key: string) => {
+    const newColumns = columns.map(col =>
+      col.key === key ? { ...col, visible: !col.visible } : col
+    );
+    setColumns(newColumns);
+    const saveObj: Record<string, boolean> = {};
+    newColumns.forEach(col => {
+      saveObj[col.key] = col.visible;
+    });
+    localStorage.setItem('productColumns', JSON.stringify(saveObj));
+  };
+
+  const handleShowAllColumns = () => {
+    const newColumns = columns.map(col => ({ ...col, visible: true }));
+    setColumns(newColumns);
+    const saveObj: Record<string, boolean> = {};
+    newColumns.forEach(col => {
+      saveObj[col.key] = true;
+    });
+    localStorage.setItem('productColumns', JSON.stringify(saveObj));
+  };
+
+  const handleHideAllColumns = () => {
+    const newColumns = columns.map(col => ({ ...col, visible: false }));
+    setColumns(newColumns);
+    const saveObj: Record<string, boolean> = {};
+    newColumns.forEach(col => {
+      saveObj[col.key] = false;
+    });
+    localStorage.setItem('productColumns', JSON.stringify(saveObj));
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'productGroups'), where('isActive', '==', true));
@@ -100,6 +178,29 @@ const Products: React.FC = () => {
     });
     return unsubscribe;
   }, []);
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      groupId: '',
+      barcode: '',
+      price: 0,
+      packaging: 'дона',
+      dosage: '',
+      composition: '',
+      commissionAmount: 0,
+      usage: '',
+      description: '',
+      isActive: true,
+      tarkibi: '',
+      doza: '',
+      miqdori: '',
+      qabul: '',
+      izoh: '',
+      qollanishi: ''
+    });
+    setEditingId(null);
+  };
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +237,13 @@ const Products: React.FC = () => {
         aiScore: 0,
         userId: auth.currentUser?.uid || 'anonymous',
         userEmail: auth.currentUser?.email || '',
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        tarkibi: formData.tarkibi || '',
+        doza: formData.doza || '',
+        miqdori: formData.miqdori || '',
+        qabul: formData.qabul || '',
+        izoh: formData.izoh || '',
+        qollanishi: formData.qollanishi || ''
       });
       setSuccess('Препарат кушилди!');
       setShowModal(false);
@@ -173,6 +280,12 @@ const Products: React.FC = () => {
         usage: formData.usage || '',
         description: formData.description || '',
         isActive: formData.isActive,
+        tarkibi: formData.tarkibi || '',
+        doza: formData.doza || '',
+        miqdori: formData.miqdori || '',
+        qabul: formData.qabul || '',
+        izoh: formData.izoh || '',
+        qollanishi: formData.qollanishi || '',
         updatedAt: serverTimestamp()
       });
       setSuccess('Препарат янгиланди!');
@@ -198,23 +311,6 @@ const Products: React.FC = () => {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      groupId: '',
-      barcode: '',
-      price: 0,
-      packaging: 'дона',
-      dosage: '',
-      composition: '',
-      commissionAmount: 0,
-      usage: '',
-      description: '',
-      isActive: true
-    });
-    setEditingId(null);
-  };
-
   const handleEditProduct = (product: Product) => {
     if (!canManageProducts) {
       setError('Сизда препарат таҳрирлаш ҳуқуқи йўқ!');
@@ -222,161 +318,25 @@ const Products: React.FC = () => {
     }
     setEditingId(product.id);
     setFormData({
-      name: product.name,
-      groupId: product.groupId,
+      name: product.name || '',
+      groupId: product.groupId || '',
       barcode: product.barcode || '',
-      price: product.price,
+      price: product.price || 0,
       packaging: product.packaging || 'дона',
       dosage: product.dosage || '',
       composition: product.composition || '',
       commissionAmount: product.commissionAmount || 0,
       usage: product.usage || '',
       description: product.description || '',
-      isActive: product.isActive !== undefined ? product.isActive : true
+      isActive: product.isActive !== undefined ? product.isActive : true,
+      tarkibi: product.tarkibi || '',
+      doza: product.doza || '',
+      miqdori: product.miqdori || '',
+      qabul: product.qabul || '',
+      izoh: product.izoh || '',
+      qollanishi: product.qollanishi || ''
     });
     setShowModal(true);
-  };
-
-  // ============ IMPORT FROM EXCEL ============
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setError('Fayl tanlanmagan!');
-      return;
-    }
-
-    if (!canManageProducts) {
-      setError('Сизда препарат импорт қилиш ҳуқуқи йўқ!');
-      e.target.value = '';
-      return;
-    }
-
-    setImportLoading(true);
-    setError('');
-    setSuccess('');
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-
-        if (!jsonData || jsonData.length === 0) {
-          setError('Файлда маълумот топилмади!');
-          setImportLoading(false);
-          e.target.value = '';
-          return;
-        }
-
-        let importedCount = 0;
-        let skippedCount = 0;
-
-        for (const row of jsonData) {
-          const name = row['Номи'] || row['Name'] || row['Препарат'] || row['Название'] || '';
-          const groupName = row['Гуруҳ'] || row['Group'] || row['Категория'] || row['Группа'] || '';
-          const price = Number(row['Нархи (сўм)'] || row['Price'] || row['Нархи'] || row['Цена'] || 0);
-          const barcode = String(row['Штрих-код'] || row['Barcode'] || row['Штрихкод'] || '');
-          const packaging = row['Упаковка'] || row['Packaging'] || 'дона';
-          const dosage = row['Дозировка'] || row['Dosage'] || '';
-          const composition = row['Таркиби'] || row['Composition'] || '';
-          const commissionAmount = Number(row['Комиссия (сўм)'] || row['Commission'] || row['Комиссия'] || row['Комиссионные'] || 0);
-          const usage = row['Қўлланиши'] || row['Usage'] || '';
-          const description = row['Изоҳ'] || row['Description'] || '';
-          const isActive = row['Ҳолат'] === 'Фаол' || row['Status'] === 'Active' || row['Холат'] === 'Актив' || true;
-
-          if (!name || !price || price <= 0) {
-            skippedCount++;
-            continue;
-          }
-
-          let groupId = '';
-          let groupNameFinal = '';
-
-          if (groupName) {
-            const existingGroup = groups.find(g => g.name.toLowerCase() === groupName.toLowerCase());
-            if (existingGroup) {
-              groupId = existingGroup.id;
-              groupNameFinal = existingGroup.name;
-            } else {
-              try {
-                const newGroupRef = await addDoc(collection(db, 'productGroups'), {
-                  name: groupName,
-                  isActive: true,
-                  userId: auth.currentUser?.uid || 'anonymous',
-                  createdAt: serverTimestamp()
-                });
-                groupId = newGroupRef.id;
-                groupNameFinal = groupName;
-                
-                const snapshot = await getDocs(query(collection(db, 'productGroups'), where('isActive', '==', true)));
-                const updatedGroups = snapshot.docs.map(doc => ({
-                  id: doc.id,
-                  ...doc.data()
-                } as ProductGroup));
-                setGroups(updatedGroups);
-              } catch (err) {
-                skippedCount++;
-                continue;
-              }
-            }
-          }
-
-          try {
-            await addDoc(collection(db, 'products'), {
-              name: name,
-              groupId: groupId,
-              groupName: groupNameFinal || '',
-              barcode: barcode || '',
-              price: price,
-              packaging: packaging || 'дона',
-              dosage: dosage || '',
-              composition: composition || '',
-              commissionAmount: commissionAmount || 0,
-              usage: usage || '',
-              description: description || '',
-              isActive: isActive,
-              salesCount: 0,
-              aiScore: 0,
-              userId: auth.currentUser?.uid || 'anonymous',
-              userEmail: auth.currentUser?.email || '',
-              createdAt: serverTimestamp()
-            });
-            importedCount++;
-          } catch (err) {
-            skippedCount++;
-          }
-        }
-
-        setImportLoading(false);
-        e.target.value = '';
-        
-        if (importedCount > 0) {
-          let msg = importedCount + ' та препарат импорт қилинди!';
-          if (skippedCount > 0) {
-            msg = msg + ' (' + skippedCount + ' та ўтказиб юборилди)';
-          }
-          setSuccess(msg);
-        } else {
-          setError('Импорт қилиш учун тўғри маълумот топилмади!');
-        }
-      } catch (error) {
-        console.error('Импорт хатолиги:', error);
-        setError('Файлни ўқишда хатолик юз берди.');
-        setImportLoading(false);
-        e.target.value = '';
-      }
-    };
-
-    reader.onerror = () => {
-      setError('Faylni o\'qishda xatolik yuz berdi!');
-      setImportLoading(false);
-      e.target.value = '';
-    };
-
-    reader.readAsArrayBuffer(file);
   };
 
   const filteredProducts = products.filter(p => {
@@ -388,21 +348,31 @@ const Products: React.FC = () => {
   });
 
   const handleExport = () => {
-    const data = filteredProducts.map((p, index) => ({
-      '№': index + 1,
-      'Номи': p.name,
-      'Гуруҳ': p.groupName || '-',
-      'Штрих-код': p.barcode || '-',
-      'Нархи (сўм)': p.price,
-      'Упаковка': p.packaging,
-      'Дозировка': p.dosage || '-',
-      'Таркиби': p.composition || '-',
-      'Комиссия (сўм)': p.commissionAmount,
-      'Қўлланиши': p.usage || '-',
-      'Сотувлар': p.salesCount || 0,
-      'AI рейтинг': p.aiScore || 0,
-      'Ҳолат': p.isActive ? 'Фаол' : 'Фаол эмас'
-    }));
+    const visibleColumns = columns.filter(c => c.visible);
+    const data = filteredProducts.map((p, index) => {
+      const row: any = {};
+      visibleColumns.forEach(col => {
+        switch (col.key) {
+          case 'index': row['№'] = index + 1; break;
+          case 'name': row['Номи'] = p.name; break;
+          case 'group': row['Гуруҳ'] = p.groupName || '-'; break;
+          case 'tarkibi': row['Таркиби'] = p.tarkibi || '-'; break;
+          case 'doza': row['Доза'] = p.doza || '-'; break;
+          case 'miqdori': row['Миқдори'] = p.miqdori || '-'; break;
+          case 'qabul': row['Қабул'] = p.qabul || '-'; break;
+          case 'izoh': row['Изоҳ'] = p.izoh || '-'; break;
+          case 'qollanishi': row['Қўлланиши'] = p.qollanishi || '-'; break;
+          case 'barcode': row['Barcode'] = p.barcode || '-'; break;
+          case 'price': row['Нархи'] = p.price; break;
+          case 'commission': row['Комиссия'] = p.commissionAmount; break;
+          case 'packaging': row['Қадоқ'] = p.packaging; break;
+          case 'sales': row['Сотувлар'] = p.salesCount || 0; break;
+          case 'ai': row['AI рейтинг'] = p.aiScore || 0; break;
+          case 'status': row['Ҳолат'] = p.isActive ? 'Фаол' : 'Фаол эмас'; break;
+        }
+      });
+      return row;
+    });
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
@@ -418,92 +388,107 @@ const Products: React.FC = () => {
     <div style={{ padding: '20px' }}>
       {error && <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>❌ {error}</div>}
       {success && <div style={{ background: '#efe', color: '#3c3', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>✅ {success}</div>}
-      {importLoading && <div style={{ background: '#cce5ff', color: '#004085', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>⏳ Импорт қилинмоқда...</div>}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <h2 style={{ margin: 0 }}>💊 Препаратлар ({products.length})</h2>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <input type="text" placeholder="🔍 Қидириш..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '180px' }} />
-          <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}>
+        <div>
+          <h2 style={{ margin: 0 }}>💊 Препаратлар ({filteredProducts.length})</h2>
+          <div style={{ fontSize: '13px', color: '#888', marginTop: '4px' }}>
+            📦 Жами: {products.length} | 📂 Гуруҳлар: {groups.length}
+            <span style={{ marginLeft: '12px', background: '#f0f0f0', padding: '2px 10px', borderRadius: '12px' }}>
+              👁️ {columns.filter(c => c.visible).length} устун кўринади
+            </span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="🔍 Қидириш..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '180px' }}
+          />
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px' }}
+          >
             <option value="all">📋 Барча гуруҳлар</option>
-            {groups.filter(g => g.isActive).map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}
+            {groups.filter(g => g.isActive).map(g => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
           </select>
-          
-          <label style={{ padding: '8px 16px', background: canManageProducts ? '#2ecc71' : '#95a5a6', color: 'white', border: 'none', borderRadius: '8px', cursor: canManageProducts ? 'pointer' : 'not-allowed', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '6px', opacity: canManageProducts ? 1 : 0.6 }}>
-            📥 Импорт
-            <input type="file" accept=".xlsx,.xls" onChange={handleImport} ref={fileInputRef} style={{ display: 'none' }} disabled={!canManageProducts} />
-          </label>
-          
-          <button onClick={handleExport} style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📤 Экспорт</button>
-          {canManageProducts && (<button onClick={() => { resetForm(); setShowModal(true); }} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>➕ Препарат қўшиш</button>)}
-        </div>
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #667eea' }}>
-          <div style={{ fontSize: '12px', color: '#666' }}>📦 Жами</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#667eea' }}>{products.length}</div>
-        </div>
-        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #2ecc71' }}>
-          <div style={{ fontSize: '12px', color: '#666' }}>✅ Фаол</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2ecc71' }}>{products.filter(p => p.isActive).length}</div>
-        </div>
-        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #e74c3c' }}>
-          <div style={{ fontSize: '12px', color: '#666' }}>❌ Фаол эмас</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#e74c3c' }}>{products.filter(p => !p.isActive).length}</div>
-        </div>
-        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #f39c12' }}>
-          <div style={{ fontSize: '12px', color: '#666' }}>📊 Гуруҳлар</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f39c12' }}>{groups.length}</div>
+          <ColumnSelector
+            columns={columns}
+            onToggle={handleToggleColumn}
+            onShowAll={handleShowAllColumns}
+            onHideAll={handleHideAllColumns}
+          />
+
+          <button onClick={handleExport} style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📤 Экспорт</button>
+          {canManageProducts && (
+            <button onClick={() => { resetForm(); setShowModal(true); }} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>➕ Препарат қўшиш</button>
+          )}
         </div>
       </div>
 
       <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
             <thead style={{ background: '#f8f9fa' }}>
               <tr>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>№</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Номи</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Гуруҳ</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Нархи</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Комиссия</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Упаковка</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>AI</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Ҳолат</th>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px' }}>Ҳаракатлар</th>
+                {columns.filter(c => c.visible).map(col => (
+                  <th key={col.key} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                    {col.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {filteredProducts.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>📭 Ҳеч қандай препарат топилмади</td></tr>
+                <tr>
+                  <td colSpan={columns.filter(c => c.visible).length} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
+                    📭 Ҳеч қандай препарат топилмади
+                  </td>
+                </tr>
               ) : (
                 filteredProducts.map((product, index) => (
                   <tr key={product.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: '10px 14px' }}>{index + 1}</td>
-                    <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{product.name}</td>
-                    <td style={{ padding: '10px 14px' }}><span style={{ padding: '2px 8px', borderRadius: '4px', background: '#e8ecf1', fontSize: '12px' }}>{product.groupName || '-'}</span></td>
-                    <td style={{ padding: '10px 14px' }}>{product.price.toLocaleString()} сўм</td>
-                    <td style={{ padding: '10px 14px' }}>{product.commissionAmount.toLocaleString()} сўм</td>
-                    <td style={{ padding: '10px 14px' }}>{product.packaging}</td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{ padding: '2px 8px', borderRadius: '12px', background: (product.aiScore || 0) >= 80 ? '#d4edda' : (product.aiScore || 0) >= 60 ? '#fff3cd' : '#f8d7da', color: (product.aiScore || 0) >= 80 ? '#155724' : (product.aiScore || 0) >= 60 ? '#856404' : '#721c24', fontSize: '12px', fontWeight: 'bold' }}>
-                        {product.aiScore || 0}%
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <span style={{ padding: '2px 8px', borderRadius: '4px', background: product.isActive ? '#d4edda' : '#f8d7da', color: product.isActive ? '#155724' : '#721c24', fontSize: '12px' }}>
-                        {product.isActive ? '✅ Фаол' : '❌ Фаол эмас'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      {canManageProducts && (
-                        <>
-                          <button onClick={() => handleEditProduct(product)} style={{ padding: '4px 8px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
-                          <button onClick={() => handleDeleteProduct(product.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
-                        </>
-                      )}
-                    </td>
+                    {columns.filter(c => c.visible).map(col => (
+                      <td key={col.key} style={{ padding: '10px 14px', fontSize: '13px' }}>
+                        {(() => {
+                          switch (col.key) {
+                            case 'index': return index + 1;
+                            case 'name': return <span style={{ fontWeight: 'bold' }}>{product.name}</span>;
+                            case 'group': return <span style={{ padding: '2px 8px', borderRadius: '4px', background: '#e8ecf1', fontSize: '12px' }}>{product.groupName || '-'}</span>;
+                            case 'tarkibi': return product.tarkibi || '-';
+                            case 'doza': return product.doza || '-';
+                            case 'miqdori': return product.miqdori || '-';
+                            case 'qabul': return product.qabul || '-';
+                            case 'izoh': return product.izoh || '-';
+                            case 'qollanishi': return <div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.qollanishi || '-'}</div>;
+                            case 'barcode': return <span style={{ fontFamily: 'monospace' }}>{product.barcode || '-'}</span>;
+                            case 'price': return <span style={{ fontWeight: 'bold' }}>{product.price.toLocaleString()} сўм</span>;
+                            case 'commission': return product.commissionAmount.toLocaleString() + ' сўм';
+                            case 'packaging': return product.packaging || '-';
+                            case 'sales': return product.salesCount || 0;
+                            case 'ai': return <span style={{ padding: '2px 8px', borderRadius: '12px', background: (product.aiScore || 0) >= 80 ? '#d4edda' : (product.aiScore || 0) >= 60 ? '#fff3cd' : '#f8d7da', color: (product.aiScore || 0) >= 80 ? '#155724' : (product.aiScore || 0) >= 60 ? '#856404' : '#721c24', fontSize: '12px', fontWeight: 'bold' }}>{product.aiScore || 0}%</span>;
+                            case 'status': return <span style={{ padding: '2px 8px', borderRadius: '4px', background: product.isActive ? '#d4edda' : '#f8d7da', color: product.isActive ? '#155724' : '#721c24', fontSize: '12px' }}>{product.isActive ? '✅ Фаол' : '❌ Фаол эмас'}</span>;
+                            case 'actions': return (
+                              <>
+                                {canManageProducts && (
+                                  <>
+                                    <button onClick={() => handleEditProduct(product)} style={{ padding: '4px 8px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
+                                    <button onClick={() => handleDeleteProduct(product.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
+                                  </>
+                                )}
+                              </>
+                            );
+                            default: return '-';
+                          }
+                        })()}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}
@@ -512,31 +497,91 @@ const Products: React.FC = () => {
         </div>
       </div>
 
+      {/* ============ MODAL ============ */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }} onClick={() => setShowModal(false)}>
-          <div style={{ background: 'white', padding: '30px', borderRadius: '16px', maxWidth: '550px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }} onClick={() => setShowModal(false)}>
+          <div style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '16px',
+            maxWidth: '700px',
+            width: '95%',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ marginTop: 0 }}>{editingId ? '✏️ Препаратни таҳрирлаш' : '➕ Янги препарат қўшиш'}</h3>
             <form onSubmit={editingId ? handleUpdateProduct : handleAddProduct}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Номи *</label><input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
-                <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Гуруҳ *</label><select value={formData.groupId} onChange={(e) => setFormData({...formData, groupId: e.target.value})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}><option value="">Танланг</option>{groups.filter(g => g.isActive).map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}</select></div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>💊 Номи *</label>
+                  <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>📂 Гуруҳ *</label>
+                  <select value={formData.groupId} onChange={(e) => setFormData({...formData, groupId: e.target.value})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}>
+                    <option value="">Танланг</option>
+                    {groups.filter(g => g.isActive).map(g => (<option key={g.id} value={g.id}>{g.name}</option>))}
+                  </select>
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Штрих-код</label><input type="text" value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
-                <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Нархи (сўм) *</label><input type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: Number(e.target.value)})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>🧪 Таркиби</label>
+                  <input type="text" value={formData.tarkibi} onChange={(e) => setFormData({...formData, tarkibi: e.target.value})} placeholder="Липосамалный Цинк" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>⚡ Доза</label>
+                  <input type="text" value={formData.doza} onChange={(e) => setFormData({...formData, doza: e.target.value})} placeholder="30 мл" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Упаковка</label><select value={formData.packaging} onChange={(e) => setFormData({...formData, packaging: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}><option value="дона">Дона</option><option value="флакон">Флакон</option><option value="ампула">Ампула</option><option value="блистер">Блистер</option><option value="порошок">Порошок</option></select></div>
-                <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Дозировка</label><input type="text" value={formData.dosage} onChange={(e) => setFormData({...formData, dosage: e.target.value})} placeholder="500 мг, 30 мл" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>📦 Миқдори</label>
+                  <input type="text" value={formData.miqdori} onChange={(e) => setFormData({...formData, miqdori: e.target.value})} placeholder="30 мл" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>🕐 Қабул</label>
+                  <input type="text" value={formData.qabul} onChange={(e) => setFormData({...formData, qabul: e.target.value})} placeholder="кунига 1-2 махал" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
               </div>
-              <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Таркиби</label><input type="text" value={formData.composition} onChange={(e) => setFormData({...formData, composition: e.target.value})} placeholder="Актив моддалар" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
-              <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Комиссия (сўм) *</label><input type="number" value={formData.commissionAmount} onChange={(e) => setFormData({...formData, commissionAmount: Number(e.target.value)})} required min="0" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
-              <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Қўлланиши</label><input type="text" value={formData.usage} onChange={(e) => setFormData({...formData, usage: e.target.value})} placeholder="Қандай ишлатиш" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
-              <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Изоҳ</label><input type="text" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} /></div>
-              <div><label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Ҳолат</label><select value={formData.isActive ? 'true' : 'false'} onChange={(e) => setFormData({...formData, isActive: e.target.value === 'true'})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}><option value="true">✅ Фаол</option><option value="false">❌ Фаол эмас</option></select></div>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                <button type="button" onClick={() => { setShowModal(false); setEditingId(null); resetForm(); }} style={{ padding: '8px 16px', background: '#e8ecf1', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Бекор қилиш</button>
-                <button type="submit" style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{editingId ? 'Янгилаш' : 'Сақлаш'}</button>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>🔢 Barcode *</label>
+                  <input type="text" value={formData.barcode} onChange={(e) => setFormData({...formData, barcode: e.target.value})} placeholder="8018799000646" required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>💰 Нархи (сўм) *</label>
+                  <input type="number" value={formData.price} onChange={(e) => setFormData({...formData, price: Number(e.target.value)})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+                </div>
+              </div>
+
+              <div style={{ marginTop: '10px' }}>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>📋 Қўлланиши</label>
+                <textarea value={formData.qollanishi} onChange={(e) => setFormData({...formData, qollanishi: e.target.value})} rows={2} placeholder="3 йошгача булган болаларга 5 томчи..." style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+              </div>
+
+              <div style={{ marginTop: '10px' }}>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>📝 Изоҳ</label>
+                <input type="text" value={formData.izoh} onChange={(e) => setFormData({...formData, izoh: e.target.value})} placeholder="микро элемент" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                <button type="button" onClick={() => { setShowModal(false); setEditingId(null); resetForm(); }} style={{ padding: '10px 20px', background: '#e8ecf1', border: 'none', borderRadius: '6px', cursor: 'pointer', flex: 1 }}>Бекор қилиш</button>
+                <button type="submit" style={{ padding: '10px 20px', background: '#667eea', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', flex: 2 }}>{editingId ? 'Янгилаш' : 'Сақлаш'}</button>
               </div>
             </form>
           </div>
