@@ -4,12 +4,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 package-lock.json
-yarn.lock
 
 # Build
 dist/
 build/
-*.local
+.vite/
+.vercel/
 
 # Environment
 .env
@@ -21,24 +21,14 @@ build/
 .idea/
 *.swp
 *.swo
-*~
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Vite
-.vite/
-*.tsbuildinfo
 
 # Firebase
-firebase-debug.log
-firebase-debug.*.log
-
-# Vercel
-.vercel/
+firebase-debug.log*
+.google/
 
 # Other
 *.log
-.cache/
+*.tmp
+*.temp
 coverage/
