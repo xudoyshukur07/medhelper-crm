@@ -14,6 +14,7 @@ import Prescriptions from './pages/Prescriptions';
 import Plans from './pages/Plans';
 import Regions from './pages/Regions';
 import TelegramBot from './pages/TelegramBot';
+import Templates from './pages/Templates';
 import PrivateRoute from './components/common/PrivateRoute';
 import './App.css';
 
@@ -37,6 +38,7 @@ function App() {
             <Route path="plans" element={<Plans />} />
             <Route path="regions" element={<Regions />} />
             <Route path="telegram" element={<TelegramBot />} />
+            <Route path="templates" element={<Templates />} />
           </Route>
         </Routes>
       </BrowserRouter>
