@@ -1,0 +1,697 @@
+﻿<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Elektron Shablonlar - MedHelper</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; font-family: "Segoe UI", sans-serif; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        .login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000;
+            display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.8);
+        }
+        .login-box { background: white; padding: 40px; border-radius: 20px; text-align: center; width: 350px; }
+        .login-box h2 { color: #764ba2; margin-bottom: 15px; }
+        .login-box input { width: 100%; padding: 14px; font-size: 18px; text-align: center; letter-spacing: 5px; border: 2px solid #ddd; border-radius: 10px; margin-bottom: 15px; }
+        .login-box button { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; }
+        .error-msg { color: red; margin-top: 10px; min-height: 30px; }
+        
+        .main-app { display: none; }
+        .navbar {
+            background: white; padding: 15px 25px; border-radius: 20px; display: flex;
+            justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px;
+        }
+        .logo { font-size: 22px; font-weight: bold; color: #764ba2; }
+        .doctor-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .doctor-info .name { font-weight: bold; color: #333; }
+        .doctor-info .phone { color: #666; font-size: 14px; }
+        .doctor-info .region { color: #666; font-size: 14px; }
+        .logout-btn { padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        .profile-btn { padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 10px; cursor: pointer; }
+        
+        .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .product-card {
+            background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: 0.3s; border: 2px solid transparent;
+        }
+        .product-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        .product-card.selected { border-color: #28a745; background: #f0fff4; }
+        .product-card .name { font-size: 16px; font-weight: bold; color: #764ba2; margin-bottom: 6px; }
+        .product-card .info { font-size: 12px; color: #888; margin-bottom: 4px; }
+        .product-card .actions { display: flex; gap: 8px; margin-top: 12px; }
+        .product-card .actions button { flex: 1; padding: 8px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-print { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-add { background: #28a745; color: white; width: 40px; }
+        .btn-add.active { background: #dc3545; }
+        .product-card .badge { position: absolute; top: -8px; right: -8px; background: #28a745; color: white; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { color: #764ba2; }
+        .close-modal { background: none; border: none; font-size: 24px; cursor: pointer; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 500; margin-bottom: 5px; font-size: 13px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 10px; font-size: 14px; }
+        .modal-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        
+        .doctor-list-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .doctor-list-item:hover { background: #f0f0f0; }
+        .doctor-list-item.selected { background: #d4edda; border-left: 3px solid #28a745; }
+        .doctor-list-item .info { flex: 1; }
+        .doctor-list-item .name { font-weight: bold; }
+        .doctor-list-item .speciality { font-size: 12px; color: #888; }
+        
+        .selected-products-list { max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 15px; }
+        .selected-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+        .selected-item .remove { color: #dc3545; cursor: pointer; font-weight: bold; }
+        
+        .toast { position: fixed; bottom: 30px; right: 30px; background: #28a745; color: white; padding: 12px 20px; border-radius: 10px; z-index: 1100; animation: slideIn 0.3s ease; }
+        .toast.error { background: #dc3545; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        @media (max-width: 768px) { .products-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <!-- LOGIN -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-box">
+            <h2>🔐 Elektron Shablonlar</h2>
+            <p>MedHelper tizimi</p>
+            <input type="password" id="loginPassword" placeholder="****" maxlength="10">
+            <button id="loginBtn">Kirish</button>
+            <div class="error-msg" id="loginError"></div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div class="main-app" id="mainApp">
+        <div class="container">
+            <div class="navbar">
+                <div class="logo">📋 Elektron Shablonlar</div>
+                <div class="doctor-info">
+                    <span class="name">👨‍⚕️ <span id="doctorName">Tanlanmagan</span></span>
+                    <span class="phone">📞 <span id="doctorPhone">-</span></span>
+                    <span class="region">📍 <span id="doctorRegion">-</span></span>
+                    <button class="profile-btn" id="profileBtn">⚙️ Profil</button>
+                    <button class="logout-btn" id="logoutBtn">🚪 Chiqish</button>
+                </div>
+            </div>
+
+            <!-- Products -->
+            <h2 style="color: white; margin-bottom: 15px;">💊 Preparatlar</h2>
+            <div class="products-grid" id="productsGrid">
+                <div style="grid-column:1/-1; text-align:center; padding:40px; color:white;">⏳ Yuklanmoqda...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROFILE MODAL -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Vrach tanlash</h3>
+                <button class="close-modal" id="closeProfileBtn">&times;</button>
+            </div>
+            <div id="profileStep1">
+                <div class="form-group">
+                    <label>🔐 Parol</label>
+                    <input type="password" id="profilePassword" placeholder="Parolni kiriting">
+                </div>
+                <button class="modal-btn" id="profilePasswordBtn">Tasdiqlash</button>
+            </div>
+            <div id="profileStep2" style="display:none;">
+                <div class="form-group">
+                    <label>📍 Viloyat</label>
+                    <select id="editDoctorRegion"><option value="">-- Tanlang --</option></select>
+                </div>
+                <div class="form-group">
+                    <label>🏙️ Tuman</label>
+                    <select id="editDoctorDistrict"><option value="">-- Tanlang --</option></select>
+                </div>
+                <div id="doctorList" style="max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:10px; padding:10px;">
+                    <div style="text-align:center; color:#999;">Viloyat va tumanni tanlang</div>
+                </div>
+                <button class="modal-btn" id="saveDoctorBtn">💾 Saqlash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRINT MODAL -->
+    <div class="modal" id="printModal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🖨️ Retsept chop etish</h3>
+                <button class="close-modal" id="closePrintModal">&times;</button>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:14px; color:#666; margin-bottom:10px;">
+                    📋 Tanlangan preparatlar: <span id="printCount">0</span> ta
+                </div>
+                <div class="selected-products-list" id="printProductList"></div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:12px; color:#888; margin-bottom:5px;">👤 Bemor ma'lumotlari (ixtiyoriy)</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <input type="text" id="patientName" placeholder="Bemor ismi" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+                    <input type="text" id="patientPhone" placeholder="Telefon" style="padding:8px; border:1px solid #ddd; border-radius:6px;">
+                </div>
+                <input type="text" id="patientAge" placeholder="Yoshi" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; margin-top:8px;">
+            </div>
+            <button class="modal-btn" id="confirmPrintBtn" style="background:linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                🖨️ Chop etish
+            </button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script>
+        // ============ FIREBASE CONFIG ============
+        const firebaseConfig = {
+            apiKey: "AIzaSyA3L3LhvkAjvDIHzWgsl0fexRe8yqA5b00",
+            authDomain: "medhelper-9b34c.firebaseapp.com",
+            projectId: "medhelper-9b34c",
+            storageBucket: "medhelper-9b34c.appspot.com",
+            messagingSenderId: "403106729093",
+            appId: "1:403106729093:web:4b21f51bff98f583fe6ce9"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ============ CONSTANTS ============
+        const UNIVERSAL_PASSWORD = "1997";
+        const CHANGE_PASSWORD = "2599767";
+
+        // ============ STATE ============
+        let doctor = null;
+        let templates = [];
+        let products = [];
+        let selectedProducts = [];
+        let allDoctors = [];
+        let selectedDoctorId = null;
+        let deviceId = localStorage.getItem("deviceId") || "DEV-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 7);
+        localStorage.setItem("deviceId", deviceId);
+
+        // ============ REGION-DISTRICT ============
+        const regionDistricts = {
+            "Toshkent shahri": ["Yashnobod","Mirzo Ulugbek","Olmazor","Bektemir","Chilonzor","Uchtepa","Sergeli","Yakkasaroy","Shayxontohur","Mirobod"],
+            "Toshkent viloyati": ["Bekobod","Buka","Bustonlik","Zangiota","Qibray","Ohangaron","Oqqorgon","Parkent","Piskent","Chirchiq","Yangiyol"],
+            "Samarqand viloyati": ["Samarqand sh.","Bulungur","Jomboy","Ishtixon","Kattaqorgon","Narpay","Oqdaryo","Payariq","Pastdargom","Urgut"],
+            "Buxoro viloyati": ["Buxoro sh.","Jondor","Kogon","Qorakol","Olot","Peshku","Romitan","Shofirkon","Vobkent","Gijduvon"],
+            "Namangan viloyati": ["Namangan sh.","Kosonsoy","Mingbuloq","Norin","Pop","Toraqorgon","Uychi","Uchqorgon","Chortoq","Chust"],
+            "Fargona viloyati": ["Fargona sh.","Oltiariq","Beshariq","Buvaydi","Dangara","Qoshtepa","Quva","Quvasoy","Margilon","Rishton","Sox","Toshloq","Uchkoprik","Yozyovon"],
+            "Andijon viloyati": ["Andijon sh.","Asaka","Baliqchi","Buz","Izboskan","Jalalkuduk","Marhamat","Oltinkol","Paxtaobod","Shahrixon"],
+            "Qashqadaryo viloyati": ["Qarshi sh.","Shahrisabz","Guzor","Dehqonobod","Kamashi","Kasbi","Kitob","Mirishkor","Muborak","Nishon","Chiroqchi","Yakkabog"],
+            "Surxondaryo viloyati": ["Termiz sh.","Angor","Boysun","Denov","Jarqorgon","Qiziriq","Qumqorgon","Muzrabot","Oltinsoy","Sariosiyo","Uzun","Sherobod","Shurchi"],
+            "Navoiy viloyati": ["Navoiy sh.","Zarafshon","Qiziltepa","Navbahor","Nurata","Tomdi","Uchquduq","Xatirchi"],
+            "Xorazm viloyati": ["Urganch sh.","Bogot","Gurlan","Qoshkopir","Qushkopir","Toshovul","Xiva","Xonqa","Shovot","Yangiariq","Yangibozor"],
+            "Jizzax viloyati": ["Jizzax sh.","Arnasoy","Baxmal","Gallaorol","Do'stlik","Zomin","Zarbdor","Zafarobod","Mirzachul","Paxtakor","Yangiobod"],
+            "Sirdaryo viloyati": ["Guliston sh.","Boyovut","Mirzaobod","Oqoltin","Sardoba","Sayxunobod","Sirdaryo","Xovos"],
+            "Qoraqalpogiston": ["Nukus sh.","Amudaryo","Beruniy","Kegeyli","QaraozeK","Qonlikol","Qongirot","Moynoq","Taxtakopir","Turtkul","Xojayli","Chimboy","Shumanay","Ellikqala"]
+        };
+
+        // ============ LOGIN ============
+        document.getElementById("loginBtn").onclick = function() {
+            const password = document.getElementById("loginPassword").value;
+            if (password === UNIVERSAL_PASSWORD) {
+                document.getElementById("loginOverlay").style.display = "none";
+                document.getElementById("mainApp").style.display = "block";
+                loadDoctors();
+                checkAutoLogin();
+            } else {
+                document.getElementById("loginError").textContent = "❌ Parol noto'g'ri!";
+                document.getElementById("loginPassword").value = "";
+            }
+        };
+
+        document.getElementById("loginPassword").addEventListener("keypress", function(e) {
+            if (e.key === "Enter") document.getElementById("loginBtn").click();
+        });
+
+        // ============ LOAD DOCTORS ============
+        async function loadDoctors() {
+            try {
+                const snapshot = await db.collection("doctors").where("isActive", "==", true).get();
+                allDoctors = [];
+                snapshot.forEach(doc => {
+                    allDoctors.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("✅ Doctors loaded:", allDoctors.length);
+                
+                const savedDoctorId = localStorage.getItem("doctor_id");
+                if (savedDoctorId) {
+                    const found = allDoctors.find(d => d.id === savedDoctorId);
+                    if (found) {
+                        doctor = found;
+                        updateDoctorDisplay();
+                        loadData();
+                        return;
+                    }
+                }
+                setTimeout(() => document.getElementById("profileBtn").click(), 500);
+            } catch (error) {
+                console.error("Doctors load error:", error);
+            }
+        }
+
+        // ============ LOAD DATA ============
+        async function loadData() {
+            await loadProducts();
+            await loadTemplates();
+        }
+
+        async function loadProducts() {
+            try {
+                const q = db.collection("products").where("isActive", "==", true);
+                const snapshot = await q.get();
+                products = [];
+                snapshot.forEach(doc => {
+                    products.push({ id: doc.id, ...doc.data() });
+                });
+                renderProducts();
+            } catch (error) {
+                console.error("Products load error:", error);
+            }
+        }
+
+        async function loadTemplates() {
+            if (!doctor || !doctor.speciality) return;
+            try {
+                const q = db.collection("templates")
+                    .where("specialities", "array-contains", doctor.speciality)
+                    .where("isActive", "==", true);
+                const snapshot = await q.get();
+                templates = [];
+                snapshot.forEach(doc => {
+                    templates.push({ id: doc.id, ...doc.data() });
+                });
+                renderProducts();
+            } catch (error) {
+                console.error("Templates load error:", error);
+            }
+        }
+
+        // ============ RENDER PRODUCTS ============
+        function renderProducts() {
+            const grid = document.getElementById("productsGrid");
+            
+            const templateProductIds = new Set();
+            templates.forEach(t => {
+                t.productIds?.forEach(id => templateProductIds.add(id));
+            });
+            const visibleProducts = products.filter(p => templateProductIds.has(p.id));
+
+            if (visibleProducts.length === 0) {
+                grid.innerHTML = "<div style='grid-column:1/-1; text-align:center; padding:40px; background:white; border-radius:20px; color:#999;'>📭 Sizga mos preparatlar mavjud emas</div>";
+                return;
+            }
+
+            grid.innerHTML = "";
+            visibleProducts.forEach(p => {
+                const isSelected = selectedProducts.some(sp => sp.id === p.id);
+                const card = document.createElement("div");
+                card.className = "product-card" + (isSelected ? " selected" : "");
+                card.innerHTML = 
+                    <div class="name">💊 </div>
+                    <div class="info"> </div>
+                    <div class="info">⚡  | 🕐 </div>
+                    
+                    <div class="actions">
+                        <button class="btn-print" onclick="printSingle('')">🖨️ Chop etish</button>
+                        <button class="btn-add " onclick="toggleSelect('')">
+                            
+                        </button>
+                    </div>
+                ;
+                grid.appendChild(card);
+            });
+        }
+
+        // ============ TOGGLE SELECT ============
+        function toggleSelect(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            const index = selectedProducts.findIndex(p => p.id === productId);
+            if (index > -1) {
+                selectedProducts.splice(index, 1);
+            } else {
+                selectedProducts.push(product);
+            }
+            renderProducts();
+        }
+
+        // ============ PRINT SINGLE ============
+        function printSingle(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            selectedProducts = [product];
+            showPrintModal();
+        }
+
+        // ============ SHOW PRINT MODAL ============
+        function showPrintModal() {
+            if (selectedProducts.length === 0) {
+                showToast("Hech qanday preparat tanlanmagan!", true);
+                return;
+            }
+            
+            document.getElementById("printModal").style.display = "flex";
+            document.getElementById("printCount").textContent = selectedProducts.length;
+            
+            const list = document.getElementById("printProductList");
+            list.innerHTML = selectedProducts.map((p, i) => 
+                <div class="selected-item">
+                    <span>. </span>
+                    <span class="remove" onclick="removeFromSelected('')">✖</span>
+                </div>
+            ).join("");
+            
+            document.getElementById("patientName").value = "";
+            document.getElementById("patientPhone").value = "";
+            document.getElementById("patientAge").value = "";
+        }
+
+        function removeFromSelected(productId) {
+            selectedProducts = selectedProducts.filter(p => p.id !== productId);
+            if (selectedProducts.length === 0) {
+                document.getElementById("printModal").style.display = "none";
+            } else {
+                showPrintModal();
+            }
+            renderProducts();
+        }
+
+        // ============ CONFIRM PRINT ============
+        async function confirmPrint() {
+            if (selectedProducts.length === 0) {
+                showToast("Hech qanday preparat tanlanmagan!", true);
+                return;
+            }
+
+            const patientName = document.getElementById("patientName").value.trim();
+            const patientPhone = document.getElementById("patientPhone").value.trim();
+            const patientAge = document.getElementById("patientAge").value.trim();
+
+            const now = new Date();
+            const receiptNumber = "RX" + now.getFullYear() + 
+                String(now.getMonth()+1).padStart(2,"0") + 
+                String(now.getDate()).padStart(2,"0") + 
+                String(now.getHours()).padStart(2,"0") + 
+                String(now.getMinutes()).padStart(2,"0") + 
+                String(now.getSeconds()).padStart(2,"0");
+
+            try {
+                for (const product of selectedProducts) {
+                    await db.collection("prescriptions").add({
+                        doctorId: doctor.id,
+                        doctorName: doctor.name,
+                        doctorPhone: doctor.phone,
+                        doctorSpeciality: doctor.speciality,
+                        patientName: patientName,
+                        patientPhone: patientPhone,
+                        patientAge: patientAge,
+                        drugName: product.name,
+                        drugTarkibi: product.tarkibi || "",
+                        drugDoza: product.doza || "",
+                        drugMiqdori: product.miqdori || "",
+                        drugQabul: product.qabul || "",
+                        drugIzoh: product.izoh || "",
+                        drugQollanishi: product.qollanishi || "",
+                        drugBarcode: product.barcode || "",
+                        receiptNumber: receiptNumber,
+                        printedAt: new Date(),
+                        status: "active",
+                        isPrinted: true,
+                        printCount: 1,
+                        source: "electron-shablonlar",
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+
+                const printWindow = window.open("", "_blank", "width=450,height=700");
+                if (printWindow) {
+                    const html = getReceiptHTML(selectedProducts, receiptNumber, patientName);
+                    printWindow.document.write(html);
+                    printWindow.document.close();
+                    setTimeout(() => printWindow.print(), 500);
+                }
+
+                document.getElementById("printModal").style.display = "none";
+                selectedProducts = [];
+                showToast("✅ Retsept chop etildi va saqlandi!");
+                renderProducts();
+            } catch (error) {
+                console.error("Print error:", error);
+                showToast("❌ Xatolik: " + error.message, true);
+            }
+        }
+
+        // ============ RECEIPT HTML ============
+        function getReceiptHTML(productsList, receiptNumber, patientName) {
+            let phone = doctor.phone || "";
+            if (phone && phone.length === 12 && phone.startsWith("998")) {
+                phone = "+" + phone.substring(0,3) + " " + phone.substring(3,5) + " " + 
+                        phone.substring(5,8) + " " + phone.substring(8,10) + " " + phone.substring(10,12);
+            }
+
+            let drugsHtml = productsList.map((p, i) => {
+                let html = <div class="row" style="margin-top:4px;"><span class="label">. 💊 </span></div>;
+                if (p.tarkibi) html += <div class="row" style="padding-left:20px; font-size:11px;">tarkibi: </div>;
+                if (p.miqdori) html += <div class="row" style="padding-left:20px; font-size:11px;">📦 Miqdor: </div>;
+                if (p.doza) html += <div class="row" style="padding-left:20px; font-size:11px;">⚡ Doza: </div>;
+                if (p.qabul) html += <div class="row" style="padding-left:20px; font-size:11px;">🕐 Qabul: </div>;
+                if (i < productsList.length - 1) html += <div class="divider" style="margin:4px 0;"></div>;
+                return html;
+            }).join("");
+
+            let patientHtml = patientName ? <div class="patient-info">👤 Bemor: </div> : "";
+
+            return 
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>MedHelper - Retsept</title>
+    <style>
+        @page { size: 58mm auto; margin: 0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Courier New", monospace; width: 58mm; margin: 0 auto; padding: 8px 4px; background: white; font-size: 14px; line-height: 1.25; }
+        .receipt { text-align: center; }
+        .header { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+        .sub { font-size: 12px; }
+        .title { font-size: 15px; font-weight: bold; margin: 8px 0; padding: 3px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; }
+        .content { text-align: left; margin: 8px 0; }
+        .row { margin: 4px 0; }
+        .label { font-weight: bold; }
+        .divider { border-top: 1px dashed #000; margin: 8px 0; }
+        .footer { font-size: 10px; margin-top: 8px; border-top: 1px dashed #000; padding-top: 5px; }
+        .patient-info { background: #f9f9f9; padding: 6px; margin: 6px 0; border-radius: 4px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="receipt">
+        <div class="header">🏥 MedHelper</div>
+        <div class="sub">Elektron retsept tizimi</div>
+        <div class="title">Oddiy Elektron Retsept</div>
+        <div class="content">
+            <div class="row"><span class="label">Retsept №:</span> </div>
+            <div class="row"><span class="label">Sana:</span> </div>
+            
+            <div class="divider"></div>
+            
+            <div class="divider"></div>
+            <div class="row"><span class="label">👨‍⚕️ Vrach:</span> </div>
+            <div class="row"><span class="label">📞 Telefon:</span> </div>
+            <div class="row"><span class="label">✅ Holat:</span> Faol</div>
+            <div class="row"><span class="label">Muddat:</span> 30 kun</div>
+        </div>
+        <div class="footer">* Bu retsept faqat BAD uchun *<br>MedHelper elektron tizimi</div>
+    </div>
+    <script>window.onload = function() { setTimeout(function() { window.print(); }, 200); };<\/script>
+</body>
+</html>;
+        }
+
+        // ============ UPDATE DISPLAY ============
+        function updateDoctorDisplay() {
+            if (doctor) {
+                document.getElementById("doctorName").textContent = doctor.name || "Vrach";
+                document.getElementById("doctorPhone").textContent = doctor.phone || "";
+                document.getElementById("doctorRegion").textContent = doctor.region || "";
+            }
+        }
+
+        // ============ PROFILE ============
+        document.getElementById("profileBtn").onclick = function() {
+            document.getElementById("profileModal").style.display = "flex";
+            document.getElementById("profileStep1").style.display = "block";
+            document.getElementById("profileStep2").style.display = "none";
+            document.getElementById("profilePassword").value = "";
+            populateRegions();
+        };
+
+        document.getElementById("closeProfileBtn").onclick = function() {
+            document.getElementById("profileModal").style.display = "none";
+        };
+
+        document.getElementById("profilePasswordBtn").onclick = function() {
+            const pass = document.getElementById("profilePassword").value;
+            if (pass === CHANGE_PASSWORD) {
+                document.getElementById("profileStep1").style.display = "none";
+                document.getElementById("profileStep2").style.display = "block";
+                populateDoctors();
+            } else {
+                showToast("❌ Parol noto'g'ri!", true);
+            }
+        };
+
+        function populateRegions() {
+            const select = document.getElementById("editDoctorRegion");
+            select.innerHTML = "<option value=\"\">-- Tanlang --</option>";
+            Object.keys(regionDistricts).forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = r;
+                opt.textContent = r;
+                select.appendChild(opt);
+            });
+            select.onchange = function() {
+                const districtSelect = document.getElementById("editDoctorDistrict");
+                districtSelect.innerHTML = "<option value=\"\">-- Tanlang --</option>";
+                const districts = regionDistricts[this.value] || [];
+                districts.forEach(d => {
+                    const opt = document.createElement("option");
+                    opt.value = d;
+                    opt.textContent = d;
+                    districtSelect.appendChild(opt);
+                });
+                populateDoctors();
+            };
+            document.getElementById("editDoctorDistrict").onchange = function() {
+                populateDoctors();
+            };
+        }
+
+        function populateDoctors() {
+            const region = document.getElementById("editDoctorRegion").value;
+            const district = document.getElementById("editDoctorDistrict").value;
+            const list = document.getElementById("doctorList");
+            
+            if (!region || !district) {
+                list.innerHTML = "<div style=\"padding:15px; text-align:center; color:#999;\">Viloyat va tumanni tanlang</div>";
+                return;
+            }
+
+            const filtered = allDoctors.filter(d => d.region === region && d.district === district && d.isActive);
+            
+            if (filtered.length === 0) {
+                list.innerHTML = "<div style=\"padding:15px; text-align:center; color:#999;\">Bu hududda faol vrachlar mavjud emas</div>";
+                return;
+            }
+
+            list.innerHTML = "";
+            filtered.forEach(d => {
+                const div = document.createElement("div");
+                div.className = "doctor-list-item" + (selectedDoctorId === d.id ? " selected" : "");
+                div.innerHTML = 
+                    <div class="info">
+                        <div class="name"></div>
+                        <div class="speciality"> | 📞 </div>
+                    </div>
+                    <span style="font-size:20px;"></span>
+                ;
+                div.onclick = function() {
+                    selectedDoctorId = d.id;
+                    populateDoctors();
+                };
+                list.appendChild(div);
+            });
+        }
+
+        document.getElementById("saveDoctorBtn").onclick = async function() {
+            if (!selectedDoctorId) {
+                showToast("❌ Iltimos, vrachni tanlang!", true);
+                return;
+            }
+
+            try {
+                const selected = allDoctors.find(d => d.id === selectedDoctorId);
+                if (!selected) {
+                    showToast("❌ Vrach topilmadi!", true);
+                    return;
+                }
+
+                doctor = selected;
+                localStorage.setItem("doctor_id", doctor.id);
+                localStorage.setItem("doctor_name", doctor.name);
+                localStorage.setItem("doctor_phone", doctor.phone);
+                localStorage.setItem("doctor_region", doctor.region);
+                localStorage.setItem("doctor_district", doctor.district);
+                localStorage.setItem("doctor_speciality", doctor.speciality);
+                localStorage.setItem("auto_login", "true");
+
+                updateDoctorDisplay();
+                document.getElementById("profileModal").style.display = "none";
+                showToast("✅ Vrach tanlandi!");
+                loadData();
+            } catch (error) {
+                showToast("❌ Xatolik: " + error.message, true);
+            }
+        };
+
+        // ============ LOGOUT ============
+        document.getElementById("logoutBtn").onclick = function() {
+            localStorage.clear();
+            document.getElementById("loginOverlay").style.display = "flex";
+            document.getElementById("mainApp").style.display = "none";
+            document.getElementById("loginPassword").value = "";
+        };
+
+        // ============ TOAST ============
+        function showToast(msg, isError = false) {
+            const toast = document.createElement("div");
+            toast.className = "toast" + (isError ? " error" : "");
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // ============ AUTO LOGIN ============
+        function checkAutoLogin() {
+            const savedDoctorId = localStorage.getItem("doctor_id");
+            const savedDeviceId = localStorage.getItem("deviceId");
+            const savedAutoLogin = localStorage.getItem("auto_login");
+            
+            if (savedAutoLogin === "true" && savedDoctorId && savedDeviceId) {
+                const found = allDoctors.find(d => d.id === savedDoctorId);
+                if (found) {
+                    doctor = found;
+                    updateDoctorDisplay();
+                    loadData();
+                }
+            }
+        }
+
+        // ============ CLOSE MODALS ============
+        document.getElementById("closePrintModal").onclick = function() {
+            document.getElementById("printModal").style.display = "none";
+        };
+
+        document.getElementById("confirmPrintBtn").onclick = confirmPrint;
+
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") {
+                document.querySelectorAll(".modal").forEach(m => m.style.display = "none");
+            }
+        });
+
+        console.log("📋 Elektron Shablonlar App v1.0");
+    </script>
+</body>
+</html>
