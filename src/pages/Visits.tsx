@@ -2,7 +2,7 @@
 import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
 import { REGIONS_DATA, SPECIALITIES } from '../utils/regions';
-import { db, auth } from '../firebase/config';
+import { db, auth } from '../firebase';
 import {
   collection,
   getDocs,
@@ -10,6 +10,8 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDoc,
+  setDoc,
   query,
   orderBy,
   onSnapshot,
@@ -24,6 +26,7 @@ interface Visit {
   doctorPhone: string;
   doctorRegion: string;
   doctorDistrict: string;
+  doctorDistrictId?: string;
   doctorWorkplace?: string;
   mpId: string;
   projectId: string;
@@ -52,6 +55,7 @@ interface Doctor {
   speciality: string;
   region: string;
   district: string;
+  districtId?: string;
   workplace: string;
   category?: 'A' | 'B' | 'C' | 'D' | 'VIP';
   totalInvestment: number;
@@ -59,6 +63,17 @@ interface Doctor {
   debt: number;
   debtStatus: 'debt' | 'profit' | 'zero';
   isActive: boolean;
+}
+
+interface User {
+  uid: string;
+  email: string;
+  name: string;
+  role: string;
+  subordinates?: string[];
+  districts?: any[];
+  districtId?: string;
+  districtIds?: string[];
 }
 
 interface AIRecommendation {
@@ -92,8 +107,34 @@ interface WeekSchedule {
 
 const DAYS = ['Якшанба', 'Душанба', 'Сешанба', 'Чоршанба', 'Пайшанба', 'Жума', 'Шанба'];
 
+const defaultRoutes: DayRoute[] = [
+  { day: 1, regions: [{ region: '', districts: [] }] },
+  { day: 2, regions: [{ region: '', districts: [] }] },
+  { day: 3, regions: [{ region: '', districts: [] }] },
+  { day: 4, regions: [{ region: '', districts: [] }] },
+  { day: 5, regions: [{ region: '', districts: [] }] },
+];
+
+// ============================================================
+// YORDAMCHI FUNKSIYA: District ID larni olish
+// ============================================================
+const extractDistrictIds = (districts: any[]): string[] => {
+  if (!districts || !Array.isArray(districts)) return [];
+  
+  const ids: string[] = [];
+  districts.forEach((item: any) => {
+    if (typeof item === 'string') {
+      ids.push(item);
+    } else if (item && typeof item === 'object') {
+      if (item.id) ids.push(item.id);
+      if (item.code && !ids.includes(item.code)) ids.push(item.code);
+    }
+  });
+  return ids;
+};
+
 const Visits: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth(); // ✅ refreshUser qo'shildi
   const [visits, setVisits] = useState<Visit[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +169,10 @@ const Visits: React.FC = () => {
   const [applyPeriod, setApplyPeriod] = useState<'week' | 'month'>('week');
   const [applyDate, setApplyDate] = useState('');
 
+  // ===== MP LAR RO'YXATI (Manager uchun) =====
+  const [mpList, setMpList] = useState<User[]>([]);
+  const [selectedMpId, setSelectedMpId] = useState<string>('');
+
   // Маршрут
   const [weekRoutes, setWeekRoutes] = useState<DayRoute[]>([
     { day: 1, regions: [{ region: 'Тошкент', districts: ['Чилонзор', 'Яккасарой'] }] },
@@ -143,6 +188,7 @@ const Visits: React.FC = () => {
     doctorPhone: '',
     doctorRegion: '',
     doctorDistrict: '',
+    doctorDistrictId: '',
     doctorWorkplace: '',
     mpId: '',
     projectId: '',
@@ -229,11 +275,89 @@ const Visits: React.FC = () => {
     setCurrentDate(new Date());
   };
 
+  // ============ FIREBASE YORDAMCHI FUNKSIYALARI ============
+  
+  const saveRoutesToFirebase = async (routes: typeof weekRoutes) => {
+    if (user?.uid) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          visits: {
+            routes: routes
+          }
+        }, { merge: true });
+      } catch (error) {
+        console.error('Marshrut saqlashda xatolik:', error);
+      }
+    }
+  };
+
+  const loadRoutesFromFirebase = async () => {
+    if (user?.uid) {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.visits?.routes) {
+            return data.visits.routes;
+          }
+        }
+      } catch (error) {
+        console.error('Marshrut yuklashda xatolik:', error);
+      }
+    }
+    return null;
+  };
+
+  const saveTemplatesToFirebase = async (templates: typeof savedTemplates) => {
+    if (user?.uid) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          visits: {
+            templates: templates
+          }
+        }, { merge: true });
+      } catch (error) {
+        console.error('Shablon saqlashda xatolik:', error);
+      }
+    }
+  };
+
+  const loadTemplatesFromFirebase = async () => {
+    if (user?.uid) {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.visits?.templates) {
+            return data.visits.templates;
+          }
+        }
+      } catch (error) {
+        console.error('Shablon yuklashda xatolik:', error);
+      }
+    }
+    return null;
+  };
+
+  const clearRoutesFromFirebase = async () => {
+    if (user?.uid) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          visits: {
+            routes: []
+          }
+        }, { merge: true });
+      } catch (error) {
+        console.error('Marshrut o\'chirishda xatolik:', error);
+      }
+    }
+  };
+
   // ============ MARSHRUT FUNKSIYALARI ============
   
   const saveRoute = () => {
     try {
-      localStorage.setItem('visit_routes', JSON.stringify(weekRoutes));
+      saveRoutesToFirebase(weekRoutes);
       setShowRouteModal(false);
       alert('✅ Маршрут сақланди!');
     } catch (error) {
@@ -242,15 +366,12 @@ const Visits: React.FC = () => {
     }
   };
 
-  const loadRoute = () => {
+  const loadRoute = async () => {
     try {
-      const saved = localStorage.getItem('visit_routes');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.length > 0) {
-          setWeekRoutes(parsed);
-          console.log('✅ Маршрут юкланди:', parsed);
-        }
+      const saved = await loadRoutesFromFirebase();
+      if (saved && saved.length > 0) {
+        setWeekRoutes(saved);
+        console.log('✅ Маршрут юкланди:', saved);
       }
     } catch (error) {
       console.error('Юклашда хатолик:', error);
@@ -301,7 +422,7 @@ const Visits: React.FC = () => {
 
     const updated = [...savedTemplates, newTemplate];
     setSavedTemplates(updated);
-    localStorage.setItem('visit_templates', JSON.stringify(updated));
+    saveTemplatesToFirebase(updated);
     setTemplateName('');
     setShowTemplateModal(false);
     alert('✅ Шаблон сақланди! (' + newTemplate.visits.length + ' та визит)');
@@ -311,7 +432,7 @@ const Visits: React.FC = () => {
     if (!confirm('Шаблонни ўчирамизми?')) return;
     const updated = savedTemplates.filter(t => t.id !== id);
     setSavedTemplates(updated);
-    localStorage.setItem('visit_templates', JSON.stringify(updated));
+    saveTemplatesToFirebase(updated);
     alert('✅ Шаблон ўчирилди!');
   };
 
@@ -356,11 +477,11 @@ const Visits: React.FC = () => {
     alert('✅ Шаблон қўлланилди! (' + updatedVisits.length + ' та визит)');
   };
 
-  const loadTemplates = () => {
+  const loadTemplates = async () => {
     try {
-      const saved = localStorage.getItem('visit_templates');
+      const saved = await loadTemplatesFromFirebase();
       if (saved) {
-        setSavedTemplates(JSON.parse(saved));
+        setSavedTemplates(saved);
       }
     } catch (error) {
       console.error('Шаблонларни юклашда хатолик:', error);
@@ -371,7 +492,46 @@ const Visits: React.FC = () => {
     loadTemplates();
   }, []);
 
-  // ============ FIREBASE FUNKSIYALARI ============
+  // ============ MP LARNI YUKLASH (Manager uchun) - TUZATILGAN ============
+  useEffect(() => {
+    // ✅ User ma'lumotlarini yangilash
+    refreshUser();
+    
+    if (user?.role === 'rm' || user?.role === 'ffm') {
+      const subordinates = user.subordinates || [];
+      console.log('👥 Subordinates (yangilangan):', subordinates);
+      
+      if (subordinates.length > 0) {
+        // Barcha MP larni yuklab, filtrlaymiz (chunki where('uid', 'in', subordinates) ishlamaydi)
+        const mpQuery = query(
+          collection(db, 'users'),
+          where('role', '==', 'mp')
+        );
+        
+        const unsubscribe = onSnapshot(mpQuery, (snapshot) => {
+          const allMps = snapshot.docs.map(doc => ({
+            uid: doc.id,
+            ...doc.data()
+          } as User));
+          
+          // Faqat subordinates dagi MP larni olish
+          const filteredMps = allMps.filter(mp => 
+            subordinates.includes(mp.uid)
+          );
+          
+          setMpList(filteredMps);
+          console.log('✅ MP lar yuklandi:', filteredMps.length, 'ta');
+        });
+        
+        return () => unsubscribe();
+      } else {
+        setMpList([]);
+        console.log('⚠️ Hech qanday MP biriktirilmagan');
+      }
+    }
+  }, [user, refreshUser]); // ✅ refreshUser qo'shildi
+
+  // ============ DOCTORLARNI YUKLASH ============
 
   const loadDoctors = async () => {
     try {
@@ -380,11 +540,15 @@ const Visits: React.FC = () => {
         id: doc.id,
         ...doc.data()
       } as Doctor));
+      console.log('✅ Врачлар юкланди:', data.length, 'та');
       setDoctors(data);
     } catch (err) {
-      console.error('Doctorlarni yuklashda xatolik:', err);
+      console.error('Doctorlarni yuklashда xatolik:', err);
+      setError('Врачларни юклашда хатолик');
     }
   };
+
+  // ============ FIREBASE LISTENER ============
 
   useEffect(() => {
     const q = query(collection(db, 'visits'), orderBy('createdAt', 'desc'));
@@ -397,7 +561,7 @@ const Visits: React.FC = () => {
       setLoading(false);
     }, (error) => {
       console.error('Listener xatosi:', error);
-      setError('Ma\'lumotlarni yuklashda xatolik');
+      setError('Ma\'lumotlarni yuklashда xatolik');
       setLoading(false);
     });
 
@@ -405,6 +569,10 @@ const Visits: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+
+  // ============ TASHRIF QO'SHISH ============
+
+  const canAddVisit = user?.role === 'mp';
 
   const handleAddVisit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -416,11 +584,16 @@ const Visits: React.FC = () => {
       return;
     }
 
+    const selectedDoctor = doctors.find(d => d.id === formData.doctorId);
+
     try {
       await addDoc(collection(db, 'visits'), {
         ...formData,
+        doctorDistrictId: selectedDoctor?.districtId || '',
         status: 'planned',
         userId: auth.currentUser?.uid || 'anonymous',
+        mpId: user?.uid || '',
+        mpName: user?.name || '',
         userEmail: auth.currentUser?.email || '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -595,12 +768,15 @@ const Visits: React.FC = () => {
     let addedCount = 0;
     for (const rec of aiRecommendations) {
       try {
+        const doctor = doctors.find(d => d.id === rec.doctorId);
+        
         await addDoc(collection(db, 'visits'), {
           doctorId: rec.doctorId,
           doctorName: rec.doctorName,
           doctorPhone: '',
           doctorRegion: rec.doctorRegion,
           doctorDistrict: rec.doctorDistrict,
+          doctorDistrictId: doctor?.districtId || '',
           doctorWorkplace: '',
           mpId: user?.id || '',
           projectId: 'proj1',
@@ -624,15 +800,159 @@ const Visits: React.FC = () => {
     setShowAIModal(false);
   };
 
-  // ============ FILTRLASH ============
+  // ============================================================
+  // VRACHLAR FILTR (TUZATILGAN)
+  // ============================================================
+
+  const getAvailableDoctors = () => {
+    let available = doctors;
+    
+    if (!user) return available;
+
+    const userRole = user.role;
+    const userDistricts = user.districts || [];
+    const userDistrictId = user.districtId;
+    const userDistrictIds = user.districtIds || [];
+
+    console.log('🔍 === VRACHLAR FILTR (TUZATILGAN) ===');
+    console.log('👤 User role:', userRole);
+    console.log('📍 userDistricts (RAW):', userDistricts);
+    console.log('📍 userDistrictId:', userDistrictId);
+    console.log('📍 userDistrictIds:', userDistrictIds);
+    console.log('📋 Barcha vrachlar:', doctors.length);
+
+    // Faqat MP, RM, FFM uchun filtr
+    if (['mp', 'rm', 'ffm'].includes(userRole)) {
+      // ===== DISTRICT ID LARNI YIG'ISH =====
+      let targetDistrictIds: string[] = [];
+
+      // 1. userDistricts dan olish (obyekt yoki string)
+      if (userDistricts && userDistricts.length > 0) {
+        const extracted = extractDistrictIds(userDistricts);
+        targetDistrictIds = [...targetDistrictIds, ...extracted];
+      }
+
+      // 2. userDistrictId dan olish (MP uchun)
+      if (userDistrictId && !targetDistrictIds.includes(userDistrictId)) {
+        targetDistrictIds.push(userDistrictId);
+      }
+
+      // 3. userDistrictIds dan olish (array)
+      if (userDistrictIds && userDistrictIds.length > 0) {
+        userDistrictIds.forEach((id: string) => {
+          if (!targetDistrictIds.includes(id)) {
+            targetDistrictIds.push(id);
+          }
+        });
+      }
+
+      console.log('🎯 Target district IDs:', targetDistrictIds);
+
+      // ===== FILTR =====
+      if (targetDistrictIds.length > 0) {
+        available = available.filter((doc: Doctor) => {
+          const docDistrictId = doc.districtId || doc.district || '';
+          const match = targetDistrictIds.some((td: string) => {
+            // To'liq moslik
+            if (td === docDistrictId || td === doc.district || td === doc.districtId) {
+              return true;
+            }
+            // Qisman moslik (agar ID lar bir-birini ichiga olsa)
+            if (docDistrictId.includes(td) || td.includes(docDistrictId)) {
+              return true;
+            }
+            return false;
+          });
+          
+          if (!match) {
+            console.log(`❌ Filtrdan o'tdi: ${doc.name} (districtId: ${doc.districtId}, district: ${doc.district})`);
+          }
+          return match;
+        });
+        console.log(`✅ ${userRole} filtr: ${available.length} ta vrach qoldi`);
+      } else {
+        console.log('⚠️ District ID lar topilmadi! Barcha vrachlar ko\'rinadi.');
+      }
+    }
+    // Admin rollar - barcha vrachlar
+    else {
+      console.log('✅ Admin barcha vrachlarni ko\'radi:', available.length);
+    }
+    
+    return available;
+  };
+
+  const availableDoctors = getAvailableDoctors();
+
+  // ============================================================
+  // TASHRIFLAR FILTR (TUZATILGAN)
+  // ============================================================
 
   const getFilteredVisits = () => {
-    let filtered = visits.filter(v =>
-      v.doctorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.doctorRegion?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    let filtered = visits;
 
+    // 1. Qidiruv bo'yicha filtr
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(v =>
+        v.doctorName?.toLowerCase().includes(term) ||
+        v.purpose?.toLowerCase().includes(term) ||
+        v.doctorRegion?.toLowerCase().includes(term)
+      );
+    }
+
+    // 2. Rol bo'yicha filtr
+    if (user) {
+      const userRole = user.role;
+      const userId = user.uid;
+      const subordinates = user.subordinates || [];
+
+      console.log('🔍 === TASHRIFLAR FILTR ===');
+      console.log('👤 User role:', userRole);
+      console.log('👥 Subordinates:', subordinates);
+      console.log('📋 Tanlangan MP:', selectedMpId);
+
+      if (userRole === 'mp') {
+        // MP faqat o'z tashriflari
+        filtered = filtered.filter(v => v.userId === userId || v.mpId === userId);
+        console.log('✅ MP filtr: faqat o\'z tashriflari,', filtered.length, 'ta');
+      } 
+      else if (userRole === 'rm' || userRole === 'ffm') {
+        // Manager o'z MP larining tashriflari
+        let targetMpIds: string[] = [];
+        
+        if (selectedMpId) {
+          // Tanlangan MP
+          targetMpIds = [selectedMpId];
+          console.log('🎯 Tanlangan MP:', selectedMpId);
+        } else if (subordinates.length > 0) {
+          // Barcha o'z MP larining tashriflari
+          targetMpIds = subordinates;
+          console.log('🎯 Barcha MP lar:', targetMpIds);
+        }
+
+        if (targetMpIds.length > 0) {
+          filtered = filtered.filter(v => {
+            const match = targetMpIds.includes(v.userId || '') || targetMpIds.includes(v.mpId || '');
+            if (!match) {
+              console.log(`❌ Filtrdan o'tdi: ${v.doctorName} (userId: ${v.userId}, mpId: ${v.mpId})`);
+            }
+            return match;
+          });
+          console.log(`✅ ${userRole.toUpperCase()} filtr: ${filtered.length} ta tashrif qoldi`);
+        } else {
+          // Hech qanday MP yo'q - o'z tashriflarini ko'rsat
+          filtered = filtered.filter(v => v.userId === userId || v.mpId === userId);
+          console.log(`⚠️ ${userRole.toUpperCase()} ga biriktirilgan MP lar yo'q, o'z tashriflari: ${filtered.length} ta`);
+        }
+      }
+      // Admin rollar - barcha tashriflar
+      else {
+        console.log('✅ Admin barcha tashriflarni ko\'radi:', filtered.length);
+      }
+    }
+
+    // 3. Vaqt bo'yicha filtr
     if (viewMode === 'day') {
       const today = formatDate(currentDate);
       filtered = filtered.filter(v => v.visitDate === today);
@@ -670,7 +990,7 @@ const Visits: React.FC = () => {
 
   const resetForm = () => {
     setFormData({
-      doctorId: '', doctorName: '', doctorPhone: '', doctorRegion: '', doctorDistrict: '',
+      doctorId: '', doctorName: '', doctorPhone: '', doctorRegion: '', doctorDistrict: '', doctorDistrictId: '',
       doctorWorkplace: '', mpId: '', projectId: '', visitDate: '', visitTime: '', purpose: '', drugs: []
     });
   };
@@ -734,14 +1054,25 @@ const Visits: React.FC = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      {/* Error/Success */}
       {error && <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>❌ {error}</div>}
       {success && <div style={{ background: '#efe', color: '#3c3', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>✅ {success}</div>}
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0 }}>📅 Ташрифлар ({visits.length})</h2>
+          <h2 style={{ margin: 0 }}>📅 Ташрифлар ({filteredVisits.length})</h2>
+          
+          {user?.role === 'mp' && (
+            <span style={{ fontSize: '13px', color: '#888', background: '#e8ecf1', padding: '4px 12px', borderRadius: '12px' }}>
+              👤 Ўз ташрифларим
+            </span>
+          )}
+          {(user?.role === 'rm' || user?.role === 'ffm') && (
+            <span style={{ fontSize: '13px', color: '#888', background: '#e8ecf1', padding: '4px 12px', borderRadius: '12px' }}>
+              👥 {user.subordinates?.length || 0} та MP
+            </span>
+          )}
+          
           <div style={{ display: 'flex', gap: '4px' }}>
             <button onClick={() => { setViewMode('day'); }} style={{ padding: '4px 12px', background: viewMode === 'day' ? '#667eea' : '#e8ecf1', color: viewMode === 'day' ? 'white' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>📅 Кун</button>
             <button onClick={() => { setViewMode('week'); }} style={{ padding: '4px 12px', background: viewMode === 'week' ? '#667eea' : '#e8ecf1', color: viewMode === 'week' ? 'white' : '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>📊 Ҳафта</button>
@@ -764,11 +1095,42 @@ const Visits: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '150px' }}
           />
+          
+          {/* MP tanlash (Manager uchun) */}
+          {(user?.role === 'rm' || user?.role === 'ffm') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '13px', color: '#555' }}>👤 MP:</label>
+              <select
+                value={selectedMpId}
+                onChange={(e) => setSelectedMpId(e.target.value)}
+                style={{ padding: '6px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '13px' }}
+              >
+                <option value="">📋 Барча MP лар ({mpList.length})</option>
+                {mpList.map(mp => (
+                  <option key={mp.uid} value={mp.uid}>
+                    {mp.name} ({mp.email})
+                  </option>
+                ))}
+              </select>
+              {mpList.length === 0 && (
+                <span style={{ fontSize: '12px', color: '#f39c12' }}>
+                  ⚠️ Ҳеч қандай MP бириктирилмаган
+                </span>
+              )}
+            </div>
+          )}
+
           <button onClick={() => setShowRouteModal(true)} style={{ padding: '8px 16px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🗺️ Маршрут</button>
           <button onClick={() => setShowTemplateModal(true)} style={{ padding: '8px 16px', background: '#f39c12', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📋 Шаблонлар</button>
           <button onClick={() => { setShowAIModal(true); generateAIRecommendations(); }} style={{ padding: '8px 16px', background: '#764ba2', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🤖 AI режалаш</button>
           <button onClick={() => setShowExportModal(true)} style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📤 Экспорт</button>
-          <button onClick={() => { resetForm(); setShowModal(true); }} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>➕ Визит қўшиш</button>
+          
+          {/* Tashrif qo'shish - faqat MP uchun */}
+          {canAddVisit && (
+            <button onClick={() => { resetForm(); setShowModal(true); }} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+              ➕ Визит қўшиш
+            </button>
+          )}
         </div>
       </div>
 
@@ -984,14 +1346,8 @@ const Visits: React.FC = () => {
               <button onClick={addRouteDay} style={{ padding: '4px 12px', background: '#2ecc71', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>➕ Кун қўшиш</button>
               <button onClick={() => {
                 if (confirm('Маршрутни тозаламоқчимисиз?')) {
-                  localStorage.removeItem('visit_routes');
-                  setWeekRoutes([
-                    { day: 1, regions: [{ region: '', districts: [] }] },
-                    { day: 2, regions: [{ region: '', districts: [] }] },
-                    { day: 3, regions: [{ region: '', districts: [] }] },
-                    { day: 4, regions: [{ region: '', districts: [] }] },
-                    { day: 5, regions: [{ region: '', districts: [] }] },
-                  ]);
+                  clearRoutesFromFirebase();
+                  setWeekRoutes(defaultRoutes);
                   alert('✅ Маршрут тозalandi!');
                 }
               }} style={{ padding: '4px 12px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️ Тозалаш</button>
@@ -1120,7 +1476,7 @@ const Visits: React.FC = () => {
                       <div style={{ fontSize: '12px', color: '#555' }}>{rec.suggestedDate} {rec.suggestedTime} - {rec.reason}</div>
                     </div>
                     <button onClick={() => {
-                      const doctor = doctors.find(d => d.id === rec.doctorId);
+                      const doctor = availableDoctors.find(d => d.id === rec.doctorId);
                       if (doctor) {
                         setFormData({
                           doctorId: doctor.id,
@@ -1128,6 +1484,7 @@ const Visits: React.FC = () => {
                           doctorPhone: doctor.phone,
                           doctorRegion: doctor.region || '',
                           doctorDistrict: doctor.district || '',
+                          doctorDistrictId: doctor.districtId || '',
                           doctorWorkplace: doctor.workplace || '',
                           mpId: user?.id || '',
                           projectId: 'proj1',
@@ -1156,14 +1513,36 @@ const Visits: React.FC = () => {
             <form onSubmit={handleAddVisit}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Врач *</label>
-                <select value={formData.doctorId} onChange={(e) => {
-                  const doctor = doctors.find(d => d.id === e.target.value);
-                  if (doctor) {
-                    setFormData({ ...formData, doctorId: doctor.id, doctorName: doctor.name, doctorPhone: doctor.phone, doctorRegion: doctor.region, doctorDistrict: doctor.district, doctorWorkplace: doctor.workplace || '' });
-                  }
-                }} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}>
-                  <option value="">Танланг</option>
-                  {doctors.map(d => <option key={d.id} value={d.id}>{d.name} ({d.category || 'C'}) - {d.region}, {d.district}</option>)}
+                <select 
+                  value={formData.doctorId} 
+                  onChange={(e) => {
+                    const doctor = availableDoctors.find(d => d.id === e.target.value);
+                    if (doctor) {
+                      setFormData({ 
+                        ...formData, 
+                        doctorId: doctor.id, 
+                        doctorName: doctor.name, 
+                        doctorPhone: doctor.phone, 
+                        doctorRegion: doctor.region, 
+                        doctorDistrict: doctor.district,
+                        doctorDistrictId: doctor.districtId || '',
+                        doctorWorkplace: doctor.workplace || '' 
+                      });
+                    }
+                  }} 
+                  required 
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                >
+                  <option value="">Врач танланг</option>
+                  {availableDoctors.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.region}, {d.district})
+                      {d.category ? ' - ' + d.category : ''}
+                    </option>
+                  ))}
+                  {availableDoctors.length === 0 && (
+                    <option value="" disabled>⚠️ Districtga tegishli vrachlar yo\'q</option>
+                  )}
                 </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -1260,4 +1639,3 @@ const Visits: React.FC = () => {
 };
 
 export default Visits;
-

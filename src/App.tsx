@@ -13,6 +13,9 @@ import Investments from './pages/Investments';
 import Prescriptions from './pages/Prescriptions';
 import Plans from './pages/Plans';
 import Regions from './pages/Regions';
+import ProductGroups from './pages/ProductGroups';
+import Districts from './pages/Districts';
+import Users from './pages/Users';
 import TelegramBot from './pages/TelegramBot';
 import Templates from './pages/Templates';
 import PrivateRoute from './components/common/PrivateRoute';
@@ -37,6 +40,9 @@ function App() {
             <Route path="prescriptions" element={<Prescriptions />} />
             <Route path="plans" element={<Plans />} />
             <Route path="regions" element={<Regions />} />
+            <Route path="product-groups" element={<ProductGroups />} />
+            <Route path="districts" element={<Districts />} />
+            <Route path="users" element={<Users />} />
             <Route path="telegram" element={<TelegramBot />} />
             <Route path="templates" element={<Templates />} />
           </Route>
@@ -47,3 +53,4 @@ function App() {
 }
 
 export default App;
+

@@ -12,9 +12,7 @@ import {
   onSnapshot,
   serverTimestamp,
   where,
-  orderBy,
-  getDoc,
-  setDoc
+  orderBy
 } from 'firebase/firestore';
 import ColumnSelector from '../components/ColumnSelector';
 
@@ -83,19 +81,18 @@ const Products: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
 
-  // Columns state - localStorage dan o'qiymiz
   const [columns, setColumns] = useState(() => {
-    try {
-      const saved = localStorage.getItem('productColumns');
-      if (saved) {
+    // Firebase dan o'qiladi
+    if (saved) {
+      try {
         const parsed = JSON.parse(saved);
         return ALL_COLUMNS.map(col => ({
           ...col,
           visible: parsed[col.key] !== undefined ? parsed[col.key] : col.defaultVisible
         }));
+      } catch {
+        return ALL_COLUMNS.map(col => ({ ...col, visible: col.defaultVisible }));
       }
-    } catch (e) {
-      console.error('Columns yuklashda xatolik:', e);
     }
     return ALL_COLUMNS.map(col => ({ ...col, visible: col.defaultVisible }));
   });
@@ -122,33 +119,36 @@ const Products: React.FC = () => {
     qollanishi: ''
   });
 
-  // Columns ni localStorage ga saqlash
-  const saveColumnsToLocalStorage = (newColumns: typeof columns) => {
-    const saveObj: Record<string, boolean> = {};
-    newColumns.forEach(col => {
-      saveObj[col.key] = col.visible;
-    });
-    localStorage.setItem('productColumns', JSON.stringify(saveObj));
-  };
-
   const handleToggleColumn = (key: string) => {
     const newColumns = columns.map(col =>
       col.key === key ? { ...col, visible: !col.visible } : col
     );
     setColumns(newColumns);
-    saveColumnsToLocalStorage(newColumns);
+    const saveObj: Record<string, boolean> = {};
+    newColumns.forEach(col => {
+      saveObj[col.key] = col.visible;
+    });
+    saveColumnsToFirebase(newColumns);
   };
 
   const handleShowAllColumns = () => {
     const newColumns = columns.map(col => ({ ...col, visible: true }));
     setColumns(newColumns);
-    saveColumnsToLocalStorage(newColumns);
+    const saveObj: Record<string, boolean> = {};
+    newColumns.forEach(col => {
+      saveObj[col.key] = true;
+    });
+    saveColumnsToFirebase(newColumns);
   };
 
   const handleHideAllColumns = () => {
     const newColumns = columns.map(col => ({ ...col, visible: false }));
     setColumns(newColumns);
-    saveColumnsToLocalStorage(newColumns);
+    const saveObj: Record<string, boolean> = {};
+    newColumns.forEach(col => {
+      saveObj[col.key] = false;
+    });
+    saveColumnsToFirebase(newColumns);
   };
 
   useEffect(() => {
@@ -592,3 +592,5 @@ const Products: React.FC = () => {
 };
 
 export default Products;
+
+

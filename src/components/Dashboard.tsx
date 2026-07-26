@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../firebase/config';
+import { db, auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 
 function Dashboard() {
@@ -69,3 +69,4 @@ function Dashboard() {
 }
 
 export default Dashboard;
+

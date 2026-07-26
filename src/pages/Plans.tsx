@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import * as XLSX from "xlsx";
-import { db, auth } from "../firebase/config";
+import { db, auth } from "../firebase";
 import {
   collection,
   addDoc,
@@ -1310,3 +1310,6 @@ const Plans: React.FC = () => {
 };
 
 export default Plans;
+
+
+

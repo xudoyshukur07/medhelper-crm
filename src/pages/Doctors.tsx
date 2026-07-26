@@ -1,21 +1,20 @@
 ﻿import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
-import { REGIONS_DATA, SPECIALITIES } from '../utils/regions';
-import { db } from '../firebase/config';
-import { 
-  collection, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
+import { SPECIALITIES } from '../utils/regions';
+import { db } from '../firebase';
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
   doc,
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp
 } from 'firebase/firestore';
-import { auth } from '../firebase/config';
+import { auth } from '../firebase';
 
 interface Doctor {
   id: string;
@@ -26,7 +25,9 @@ interface Doctor {
   cardNumber: string;
   cardHolder?: string;
   region: string;
+  regionId?: string;
   district: string;
+  districtId?: string;
   mpId: string;
   projectId: string;
   telegramId?: string;
@@ -49,6 +50,14 @@ interface ColumnConfig {
   visible: boolean;
 }
 
+interface DistrictData {
+  id: string;
+  name: string;
+  regionId: string;
+  regionName: string;
+  isActive: boolean;
+}
+
 const Doctors: React.FC = () => {
   const { user } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -67,15 +76,17 @@ const Doctors: React.FC = () => {
     cardNumber: '',
     cardHolder: '',
     region: '',
+    regionId: '',
     district: '',
+    districtId: '',
     mpId: '',
     projectId: '',
     telegramId: '',
     birthdate: ''
   });
   const [districts, setDistricts] = useState<string[]>([]);
+  const [districtsData, setDistrictsData] = useState<DistrictData[]>([]);
 
-  // Устунлар конфигурацияси
   const [columns, setColumns] = useState<ColumnConfig[]>([
     { key: 'id', label: '№', visible: true },
     { key: 'name', label: 'Исм', visible: true },
@@ -93,30 +104,9 @@ const Doctors: React.FC = () => {
     { key: 'actions', label: 'Ҳаракатлар', visible: true },
   ]);
 
-  // Вилоят танланганда туманларни янгилаш
-  const handleRegionChange = (region: string) => {
-    setFormData({ ...formData, region, district: '' });
-    setDistricts(REGIONS_DATA[region as keyof typeof REGIONS_DATA] || []);
-  };
-
-  // Устунни кўрсатиш/яшириш
-  const toggleColumn = (key: string) => {
-    setColumns(columns.map(col => 
-      col.key === key ? { ...col, visible: !col.visible } : col
-    ));
-  };
-
-  // Қарзни ҳисоблаш
-  const calculateDebt = (totalInvestment: number, totalCommission: number) => {
-    const debt = totalInvestment - totalCommission;
-    let debtStatus: 'debt' | 'profit' | 'zero';
-    if (debt > 0) debtStatus = 'debt';
-    else if (debt < 0) debtStatus = 'profit';
-    else debtStatus = 'zero';
-    return { debt, debtStatus };
-  };
-
-  // Қарзни кўрсатиш
+  // ============================================
+  // ҚАРЗНИ КЎРСАТИШ
+  // ============================================
   const getDebtDisplay = (debt: number, debtStatus: string) => {
     if (debtStatus === 'debt') {
       return {
@@ -139,36 +129,48 @@ const Doctors: React.FC = () => {
     }
   };
 
-  // ============ FIREBASE FUNKSIYALARI ============
-
-  // Ma'lumotlarni yuklash
-  const loadDoctors = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const q = query(collection(db, 'doctors'), orderBy('createdAt', 'desc'));
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Doctor));
-      setDoctors(data);
-      console.log('✅ Врачлар юкланди:', data.length, 'та');
-    } catch (err: any) {
-      console.error('❌ Юклаш хатолиги:', err);
-      setError('Маълумотларни юклашда хатолик: ' + err.message);
-    }
-    setLoading(false);
+  // ============================================
+  // TUMAN NOMINI NORMALIZE QILISH
+  // ============================================
+  const normalizeName = (str: string) => {
+    if (!str) return '';
+    return str
+      .replace(/Ҳ/g, 'Х')
+      .replace(/ҳ/g, 'х')
+      .replace(/Ў/g, 'У')
+      .replace(/ў/g, 'у')
+      .replace(/Ғ/g, 'Г')
+      .replace(/ғ/g, 'г')
+      .replace(/Қ/g, 'К')
+      .replace(/қ/g, 'к')
+      .trim();
   };
 
-  // Real-time listener
+  // ============================================
+  // FIREBASE LISTENER
+  // ============================================
+
+  // Districtlarni yuklash
+  useEffect(() => {
+    console.log('📡 Districtlarni yuklash...');
+    const unsubscribe = onSnapshot(collection(db, 'districts'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as DistrictData));
+      console.log('✅ Districtlar yuklandi:', data.length, 'ta');
+      setDistrictsData(data);
+    }, (error) => {
+      console.error('❌ Districtlar yuklashda xatolik:', error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Vrachlarni yuklash
   useEffect(() => {
     const q = query(collection(db, 'doctors'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Doctor));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Doctor));
       setDoctors(data);
       setLoading(false);
       console.log('✅ Врачлар янгиланди:', data.length, 'та');
@@ -177,19 +179,74 @@ const Doctors: React.FC = () => {
       setError('Маълумотларни олишда хатолик: ' + error.message);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
-  // Врач қўшиш
+  // ============================================
+  // VILOYAT VA TUMAN (FIREBASE DAN)
+  // ============================================
+
+  // Viloyat tanlanganda
+  const handleRegionChange = (regionName: string) => {
+    setFormData({ ...formData, region: regionName, district: '', districtId: '' });
+    const filtered = districtsData
+      .filter(d => d.regionName === regionName && d.isActive !== false)
+      .map(d => d.name);
+    setDistricts(filtered);
+    console.log('✅ Viloyat tanlandi:', regionName, 'Tumanlar:', filtered.length, 'ta');
+  };
+
+  // Tuman tanlanganda
+  const handleDistrictChange = (districtName: string) => {
+    console.log('🔍 Tanlangan tuman:', districtName);
+    const normalizedInput = normalizeName(districtName);
+    const foundDistrict = districtsData.find(d => {
+      const normalizedDb = normalizeName(d.name);
+      return normalizedDb === normalizedInput;
+    });
+    console.log('✅ Topilgan district:', foundDistrict);
+    setFormData({
+      ...formData,
+      district: districtName,
+      districtId: foundDistrict?.id || ''
+    });
+    console.log('✅ Tuman tanlandi:', districtName, 'ID:', foundDistrict?.id || 'TOPILMADI!');
+  };
+
+  // ============================================
+  // CRUD
+  // ============================================
+
   const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
+    let finalDistrictId = formData.districtId;
+    if (!finalDistrictId && formData.district) {
+      const found = districtsData.find(d => normalizeName(d.name) === normalizeName(formData.district));
+      if (found) {
+        finalDistrictId = found.id;
+        console.log('✅ districtId qayta topildi:', finalDistrictId);
+      }
+    }
+
     try {
       const doctorData = {
-        ...formData,
+        name: formData.name,
+        phone: formData.phone,
+        speciality: formData.speciality || '',
+        workplace: formData.workplace || '',
+        cardNumber: formData.cardNumber || '',
+        cardHolder: formData.cardHolder || '',
+        region: formData.region || '',
+        regionId: formData.regionId || '',
+        district: formData.district || '',
+        districtId: finalDistrictId || '',
+        mpId: formData.mpId || '',
+        projectId: formData.projectId || '',
+        telegramId: formData.telegramId || '',
+        birthdate: formData.birthdate || '',
         prescriptionCount: 0,
         totalInvestment: 0,
         totalCommission: 0,
@@ -203,33 +260,28 @@ const Doctors: React.FC = () => {
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, 'doctors'), doctorData);
-      setSuccess('✅ Врач муваффақиятли қўшилди!');
+      console.log('📝 Saqlanayotgan ma\'lumot:', doctorData);
+
+      await addDoc(collection(db, 'doctors'), doctorData);
+      setSuccess('✅ Врач қўшилди!');
       setShowModal(false);
-      setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
-      setDistricts([]);
+      resetForm();
     } catch (err: any) {
       console.error('❌ Қўшиш хатолиги:', err);
-      setError('Қўшишда хатолик: ' + err.message);
+      setError('Xatolik: ' + err.message);
     }
   };
 
-  // Врачни ўчириш
   const handleDelete = async (id: string) => {
     if (!confirm('Ушбу врачни ўчирамизми?')) return;
-    setError('');
-    setSuccess('');
-
     try {
       await deleteDoc(doc(db, 'doctors', id));
-      setSuccess('✅ Врач муваффақиятли ўчирилди!');
+      setSuccess('✅ Врач ўчирилди!');
     } catch (err: any) {
-      console.error('❌ Ўчириш хатолиги:', err);
-      setError('Ўчиришда хатолик: ' + err.message);
+      setError('Xatolik: ' + err.message);
     }
   };
 
-  // Врачни таҳрирлаш
   const handleEdit = (doctor: Doctor) => {
     setEditingId(doctor.id);
     setFormData({
@@ -240,42 +292,71 @@ const Doctors: React.FC = () => {
       cardNumber: doctor.cardNumber || '',
       cardHolder: doctor.cardHolder || '',
       region: doctor.region || '',
+      regionId: doctor.regionId || '',
       district: doctor.district || '',
+      districtId: doctor.districtId || '',
       mpId: doctor.mpId || '',
       projectId: doctor.projectId || '',
       telegramId: doctor.telegramId || '',
       birthdate: doctor.birthdate || ''
     });
-    setDistricts(REGIONS_DATA[doctor.region as keyof typeof REGIONS_DATA] || []);
+    if (doctor.region) {
+      const filtered = districtsData
+        .filter(d => d.regionName === doctor.region && d.isActive !== false)
+        .map(d => d.name);
+      setDistricts(filtered);
+    }
     setShowModal(true);
   };
 
-  // Врачни янгилаш
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingId) return;
-    setError('');
-    setSuccess('');
+    
+    let finalDistrictId = formData.districtId;
+    if (!finalDistrictId && formData.district) {
+      const found = districtsData.find(d => normalizeName(d.name) === normalizeName(formData.district));
+      if (found) {
+        finalDistrictId = found.id;
+      }
+    }
 
     try {
       await updateDoc(doc(db, 'doctors', editingId), {
-        ...formData,
+        name: formData.name,
+        phone: formData.phone,
+        speciality: formData.speciality || '',
+        workplace: formData.workplace || '',
+        cardNumber: formData.cardNumber || '',
+        cardHolder: formData.cardHolder || '',
+        region: formData.region || '',
+        regionId: formData.regionId || '',
+        district: formData.district || '',
+        districtId: finalDistrictId || '',
+        mpId: formData.mpId || '',
+        projectId: formData.projectId || '',
+        telegramId: formData.telegramId || '',
+        birthdate: formData.birthdate || '',
         updatedAt: serverTimestamp()
       });
-      setSuccess('✅ Врач муваффақиятли янгиланди!');
+      setSuccess('✅ Врач янгиланди!');
       setEditingId(null);
       setShowModal(false);
-      setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
-      setDistricts([]);
+      resetForm();
     } catch (err: any) {
-      console.error('❌ Янгилаш хатолиги:', err);
-      setError('Янгилашда хатолик: ' + err.message);
+      setError('Xatolik: ' + err.message);
     }
   };
 
-  // ============ EKSPORT/IMPORT ============
+  const resetForm = () => {
+    setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', regionId: '', district: '', districtId: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
+    setDistricts([]);
+  };
 
-  // Экспорт (Excel)
+  // ============================================
+  // EKSPORT / IMPORT
+  // ============================================
+
   const handleExport = () => {
     const data = filteredDoctors.map((doc, index) => ({
       '№': index + 1,
@@ -297,17 +378,10 @@ const Doctors: React.FC = () => {
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [
-      { wch: 5 }, { wch: 25 }, { wch: 18 }, { wch: 20 },
-      { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 },
-      { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 10 }
-    ];
     XLSX.utils.book_append_sheet(wb, ws, 'Врачлар');
     XLSX.writeFile(wb, 'врачлар_' + new Date().toISOString().split('T')[0] + '.xlsx');
   };
 
-  // Импорт (Excel)
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -322,28 +396,28 @@ const Doctors: React.FC = () => {
 
         let importedCount = 0;
         for (const row of jsonData) {
-          const name = row['Исм'] || row['Ф.И.О'] || row['Name'] || '';
+          const name = row['Исм'] || row['Name'] || '';
           const phone = String(row['Телефон'] || row['Phone'] || '').replace(/\s/g, '');
-          
+
           if (name && phone) {
             await addDoc(collection(db, 'doctors'), {
               name: name,
               phone: phone,
-              speciality: row['Мутахассислик'] || row['Speciality'] || '',
-              workplace: row['Иш жойи'] || row['Workplace'] || '',
-              cardNumber: String(row['Карта рақами'] || row['CardNumber'] || '').replace(/\s/g, ''),
-              cardHolder: row['Карта эгаси'] || row['CardHolder'] || '',
-              region: row['Вилоят'] || row['Region'] || '',
-              district: row['Туман'] || row['District'] || '',
-              telegramId: row['Telegram ID'] || row['TelegramId'] || '',
-              birthdate: row['Туғилган куни'] || row['Birthdate'] || '',
+              speciality: row['Мутахассислик'] || '',
+              workplace: row['Иш жойи'] || '',
+              cardNumber: String(row['Карта рақами'] || '').replace(/\s/g, ''),
+              cardHolder: row['Карта эгаси'] || '',
+              region: row['Вилоят'] || '',
+              district: row['Туман'] || '',
+              telegramId: row['Telegram ID'] || '',
+              birthdate: row['Туғилган куни'] || '',
               prescriptionCount: 0,
               totalInvestment: 0,
               totalCommission: 0,
               debt: 0,
               debtStatus: 'zero',
-              aiScore: Number(row['AI балл'] || row['AIScore'] || 0),
-              aiGrade: (row['AI рейтинг'] || row['AIGrade'] || 'E') as 'A' | 'B' | 'C' | 'D' | 'E',
+              aiScore: Number(row['AI балл'] || 0),
+              aiGrade: (row['AI рейтинг'] || 'E') as 'A' | 'B' | 'C' | 'D' | 'E',
               isActive: true,
               userId: auth.currentUser?.uid || 'anonymous',
               createdAt: serverTimestamp()
@@ -366,14 +440,96 @@ const Doctors: React.FC = () => {
     e.target.value = '';
   };
 
-  // ============ ФИЛЬТР ============
+  // ============================================
+  // FILTR - DISTRICT ID (BARCHA ROLLAR UCHUN)
+  // ============================================
 
-  const filteredDoctors = doctors.filter(doc =>
-    doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.phone?.includes(searchTerm) ||
-    doc.speciality?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (doc.telegramId && doc.telegramId.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const getFilteredDoctors = () => {
+    let filtered = doctors;
+
+    console.log('🔍 === FILTR ISHGA TUSHDI ===');
+    console.log('👤 User role:', user?.role);
+    console.log('📍 User districtIds:', user?.districtIds);
+    console.log('📍 User districts:', user?.districts);
+    console.log('📍 User districtId:', user?.districtId);
+    console.log('📋 Barcha vrachlar soni:', doctors.length);
+
+    if (user) {
+      const userRole = user.role;
+      
+      // ===== BARCHA TARGET DISTRICTS =====
+      let targetDistricts: string[] = [];
+      
+      // 1. districtIds (Firestore array) - MP da ishlatiladi
+      if (user.districtIds && Array.isArray(user.districtIds) && user.districtIds.length > 0) {
+        targetDistricts = user.districtIds;
+        console.log('✅ districtIds array dan olindi:', targetDistricts.length, 'ta');
+      }
+      // 2. districts (Firestore array) - RM/FFM da ishlatiladi
+      else if (user.districts && Array.isArray(user.districts) && user.districts.length > 0) {
+        if (typeof user.districts[0] === 'string') {
+          targetDistricts = user.districts;
+        } else if (typeof user.districts[0] === 'object') {
+          targetDistricts = user.districts.map((d: any) => d.id || d).filter(Boolean);
+        }
+        console.log('✅ districts array dan olindi:', targetDistricts.length, 'ta');
+      }
+      // 3. districtId (string) - MP da bitta tuman
+      else if (user.districtId) {
+        targetDistricts = [user.districtId];
+        console.log('✅ districtId dan olindi:', targetDistricts);
+      }
+
+      console.log('🎯 Target districts:', targetDistricts);
+
+      // ===== FILTR QO'LLASH =====
+      // MP, RM, FFM uchun filtr
+      if (['mp', 'rm', 'ffm'].includes(userRole) && targetDistricts.length > 0) {
+        console.log(`✅ ${userRole.toUpperCase()} filtr qo'llanilmoqda`);
+        
+        filtered = filtered.filter(doc => {
+          const docDistrictId = doc.districtId || doc.district || '';
+          const match = targetDistricts.some(td => 
+            td === docDistrictId || 
+            td === doc.district || 
+            td === doc.districtId
+          );
+          if (!match) {
+            console.log(`❌ Filtrdan o'tdi: ${doc.name} (districtId: ${doc.districtId}, district: ${doc.district})`);
+          }
+          return match;
+        });
+        
+        console.log(`📊 ${filtered.length} ta vrach qoldi`);
+      } 
+      // Admin rollar - barcha vrachlar
+      else if (['superadmin', 'seo', 'hr', 'pm', 'ofm'].includes(userRole)) {
+        console.log('✅ Admin barcha vrachlarni ko\'radi:', filtered.length);
+      } 
+      // Filtr qo'llanilmagan rollar
+      else {
+        console.log(`ℹ️ ${userRole} uchun filtr qo'llanilmaydi`);
+      }
+    } else {
+      console.log('⚠️ User mavjud emas!');
+    }
+
+    // Qidiruv bo'yicha filtr
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(doc =>
+        doc.name?.toLowerCase().includes(term) ||
+        doc.phone?.includes(searchTerm) ||
+        doc.speciality?.toLowerCase().includes(term) ||
+        (doc.telegramId && doc.telegramId.toLowerCase().includes(term))
+      );
+    }
+
+    console.log('📊 Yakuniy natija:', filtered.length, 'ta');
+    return filtered;
+  };
+
+  const filteredDoctors = getFilteredDoctors();
 
   const getGradeColor = (grade: string) => {
     const colors: Record<string, string> = {
@@ -386,40 +542,28 @@ const Doctors: React.FC = () => {
     return colors[grade] || '#999';
   };
 
-  // Устунларни рендер қилиш
+  // ============================================
+  // RENDER
+  // ============================================
+
   const renderColumn = (key: string, doctor: Doctor, index: number) => {
     switch (key) {
-      case 'id':
-        return <td key={key} style={{ padding: '10px 14px' }}>{index + 1}</td>;
-      case 'name':
-        return <td key={key} style={{ padding: '10px 14px', fontWeight: 'bold' }}>{doctor.name}</td>;
-      case 'speciality':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.speciality || '-'}</td>;
-      case 'workplace':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.workplace || '-'}</td>;
-      case 'region':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.region || '-'}</td>;
-      case 'district':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.district || '-'}</td>;
-      case 'phone':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.phone}</td>;
-      case 'cardNumber':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.cardNumber || '-'}</td>;
-      case 'cardHolder':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.cardHolder || '-'}</td>;
-      case 'telegramId':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.telegramId || '-'}</td>;
-      case 'birthdate':
-        return <td key={key} style={{ padding: '10px 14px' }}>{doctor.birthdate || '-'}</td>;
+      case 'id': return <td key={key} style={{ padding: '10px 14px' }}>{index + 1}</td>;
+      case 'name': return <td key={key} style={{ padding: '10px 14px', fontWeight: 'bold' }}>{doctor.name}</td>;
+      case 'speciality': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.speciality || '-'}</td>;
+      case 'workplace': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.workplace || '-'}</td>;
+      case 'region': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.region || '-'}</td>;
+      case 'district': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.district || '-'}</td>;
+      case 'phone': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.phone}</td>;
+      case 'cardNumber': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.cardNumber || '-'}</td>;
+      case 'cardHolder': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.cardHolder || '-'}</td>;
+      case 'telegramId': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.telegramId || '-'}</td>;
+      case 'birthdate': return <td key={key} style={{ padding: '10px 14px' }}>{doctor.birthdate || '-'}</td>;
       case 'debt': {
         const debtInfo = getDebtDisplay(doctor.debt, doctor.debtStatus);
-        return (
-          <td key={key} style={{ padding: '10px 14px', color: debtInfo.color, fontWeight: 'bold' }}>
-            {debtInfo.text}
-          </td>
-        );
+        return <td key={key} style={{ padding: '10px 14px', color: debtInfo.color, fontWeight: 'bold' }}>{debtInfo.text}</td>;
       }
-      case 'ai':
+      case 'ai': {
         return (
           <td key={key} style={{ padding: '10px 14px' }}>
             <span style={{
@@ -434,38 +578,16 @@ const Doctors: React.FC = () => {
             </span>
           </td>
         );
-      case 'actions':
+      }
+      case 'actions': {
         return (
           <td key={key} style={{ padding: '10px 14px' }}>
-            <button
-              onClick={() => handleEdit(doctor)}
-              style={{
-                padding: '4px 8px',
-                background: '#cce5ff',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                marginRight: '4px'
-              }}
-            >
-              ✏️
-            </button>
-            <button
-              onClick={() => handleDelete(doctor.id)}
-              style={{
-                padding: '4px 8px',
-                background: '#f8d7da',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              🗑️
-            </button>
+            <button onClick={() => handleEdit(doctor)} style={{ padding: '4px 8px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
+            <button onClick={() => handleDelete(doctor.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
           </td>
         );
-      default:
-        return null;
+      }
+      default: return null;
     }
   };
 
@@ -473,145 +595,39 @@ const Doctors: React.FC = () => {
     return <div style={{ padding: '40px', textAlign: 'center' }}>⏳ Юкланмоқда...</div>;
   }
 
+  const regionOptions = Array.from(
+    new Set(districtsData.map(d => d.regionName).filter(Boolean))
+  );
+
   return (
     <div style={{ padding: '20px' }}>
-      {/* Error/Success Messages */}
-      {error && (
-        <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
-          ❌ {error}
-        </div>
-      )}
-      {success && (
-        <div style={{ background: '#efe', color: '#3c3', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
-          ✅ {success}
-        </div>
-      )}
+      {error && <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>❌ {error}</div>}
+      {success && <div style={{ background: '#efe', color: '#3c3', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>✅ {success}</div>}
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <h2 style={{ margin: 0 }}>👨‍⚕️ Врачлар ({doctors.length})</h2>
+        <h2 style={{ margin: 0 }}>👨‍⚕️ Врачлар ({filteredDoctors.length})</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="🔍 Қидириш..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ddd',
-              borderRadius: '8px',
-              fontSize: '14px',
-              width: '200px'
-            }}
-          />
-          <button
-            onClick={() => setShowColumnSettings(!showColumnSettings)}
-            style={{
-              padding: '8px 16px',
-              background: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            ⚙️ Устунлар
-          </button>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleImport}
-            style={{ display: 'none' }}
-            id="importFile"
-          />
-          <button
-            onClick={() => document.getElementById('importFile')?.click()}
-            style={{
-              padding: '8px 16px',
-              background: '#2ecc71',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            📥 Импорт
-          </button>
-          <button
-            onClick={handleExport}
-            style={{
-              padding: '8px 16px',
-              background: '#3498db',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            📤 Экспорт
-          </button>
-          <button
-            onClick={() => {
-              setEditingId(null);
-              setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
-              setDistricts([]);
-              setShowModal(true);
-            }}
-            style={{
-              padding: '8px 16px',
-              background: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            ➕ Врач қўшиш
-          </button>
+          <input type="text" placeholder="🔍 Қидириш..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '200px' }} />
+          <button onClick={() => setShowColumnSettings(!showColumnSettings)} style={{ padding: '8px 16px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>⚙️ Устунлар</button>
+          <input type="file" accept=".xlsx,.xls" onChange={handleImport} style={{ display: 'none' }} id="importFile" />
+          <button onClick={() => document.getElementById('importFile')?.click()} style={{ padding: '8px 16px', background: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📥 Импорт</button>
+          <button onClick={handleExport} style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📤 Экспорт</button>
+          <button onClick={() => { resetForm(); setShowModal(true); }} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>➕ Врач қўшиш</button>
         </div>
       </div>
 
-      {/* Устунлар созламалари */}
       {showColumnSettings && (
-        <div style={{
-          background: 'white',
-          padding: '16px',
-          borderRadius: '10px',
-          marginBottom: '16px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
-        }}>
+        <div style={{ background: 'white', padding: '16px', borderRadius: '10px', marginBottom: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h4 style={{ margin: 0 }}>📋 Устунларни бошқариш</h4>
-            <button
-              onClick={() => setShowColumnSettings(false)}
-              style={{
-                padding: '4px 12px',
-                background: '#e8ecf1',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              ✕ Ёпиш
-            </button>
+            <button onClick={() => setShowColumnSettings(false)} style={{ padding: '4px 12px', background: '#e8ecf1', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✕ Ёпиш</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {columns.map(col => (
-              <label key={col.key} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                background: col.visible ? '#667eea20' : '#f0f0f0',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={col.visible}
-                  onChange={() => toggleColumn(col.key)}
-                />
+              <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: col.visible ? '#667eea20' : '#f0f0f0', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
+                <input type="checkbox" checked={col.visible} onChange={() => {
+                  setColumns(columns.map(c => c.key === col.key ? { ...c, visible: !c.visible } : c));
+                }} />
                 {col.label}
               </label>
             ))}
@@ -619,65 +635,47 @@ const Doctors: React.FC = () => {
         </div>
       )}
 
-      {/* Статистика */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-        gap: '12px', 
-        marginBottom: '20px' 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+        gap: '12px',
+        marginBottom: '20px'
       }}>
         <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #e74c3c' }}>
           <div style={{ fontSize: '12px', color: '#666' }}>🔴 Қарз</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#e74c3c' }}>
-            {doctors.filter(d => d.debtStatus === 'debt').length}
-          </div>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#e74c3c' }}>{filteredDoctors.filter(d => d.debtStatus === 'debt').length}</div>
         </div>
         <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #2ecc71' }}>
           <div style={{ fontSize: '12px', color: '#666' }}>🟢 Фойда</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2ecc71' }}>
-            {doctors.filter(d => d.debtStatus === 'profit').length}
-          </div>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2ecc71' }}>{filteredDoctors.filter(d => d.debtStatus === 'profit').length}</div>
         </div>
         <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #f39c12' }}>
           <div style={{ fontSize: '12px', color: '#666' }}>🟡 Тенг</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f39c12' }}>
-            {doctors.filter(d => d.debtStatus === 'zero').length}
-          </div>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f39c12' }}>{filteredDoctors.filter(d => d.debtStatus === 'zero').length}</div>
         </div>
         <div style={{ background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #667eea' }}>
           <div style={{ fontSize: '12px', color: '#666' }}>📊 Жами қарз</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#667eea' }}>
-            {doctors.reduce((sum, d) => sum + d.debt, 0).toLocaleString()} сўм
-          </div>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#667eea' }}>{filteredDoctors.reduce((sum, d) => sum + d.debt, 0).toLocaleString()} сўм</div>
         </div>
       </div>
 
-      {/* Врачлар жадвали */}
       <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
             <thead style={{ background: '#f8f9fa' }}>
               <tr>
                 {columns.filter(col => col.visible).map(col => (
-                  <th key={col.key} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', color: '#555' }}>
-                    {col.label}
-                  </th>
+                  <th key={col.key} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '600', fontSize: '13px', color: '#555' }}>{col.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filteredDoctors.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.filter(c => c.visible).length} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>
-                    📭 Ҳеч қандай врач топилмади
-                  </td>
-                </tr>
+                <tr><td colSpan={columns.filter(c => c.visible).length} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>📭 Ҳеч қандай врач топилмади</td></tr>
               ) : (
                 filteredDoctors.map((doctor, index) => (
                   <tr key={doctor.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    {columns.filter(col => col.visible).map(col => (
-                      renderColumn(col.key, doctor, index)
-                    ))}
+                    {columns.filter(col => col.visible).map(col => renderColumn(col.key, doctor, index))}
                   </tr>
                 ))
               )}
@@ -686,117 +684,67 @@ const Doctors: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Form */}
+      {/* ===== MODAL ===== */}
       {showModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000
-          }}
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            style={{
-              background: 'white',
-              padding: '30px',
-              borderRadius: '16px',
-              maxWidth: '600px',
-              width: '90%',
-              maxHeight: '90vh',
-              overflowY: 'auto'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ marginTop: 0 }}>{editingId ? '✏️ Врачни таҳрирлаш' : '➕ Янги врач қўшиш'}</h3>
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }} onClick={() => setShowModal(false)}>
+          <div style={{
+            background: 'white',
+            padding: '30px',
+            borderRadius: '16px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }} onClick={(e) => e.stopPropagation()}>
+            <h3>{editingId ? '✏️ Врачни таҳрирлаш' : '➕ Янги врач қўшиш'}</h3>
             <form onSubmit={editingId ? handleUpdate : handleAddDoctor}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Исм *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  required
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Телефон *</label>
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  required
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="text" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} required style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Telegram ID</label>
-                <input
-                  type="text"
-                  value={formData.telegramId}
-                  onChange={(e) => setFormData({...formData, telegramId: e.target.value})}
-                  placeholder="@username"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="text" value={formData.telegramId} onChange={(e) => setFormData({...formData, telegramId: e.target.value})} placeholder="@username" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Туғилган куни</label>
-                <input
-                  type="date"
-                  value={formData.birthdate}
-                  onChange={(e) => setFormData({...formData, birthdate: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="date" value={formData.birthdate} onChange={(e) => setFormData({...formData, birthdate: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Мутахассислик</label>
-                <select
-                  value={formData.speciality}
-                  onChange={(e) => setFormData({...formData, speciality: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                >
+                <select value={formData.speciality} onChange={(e) => setFormData({...formData, speciality: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}>
                   <option value="">Танланг</option>
-                  {SPECIALITIES.map((spec) => (
-                    <option key={spec} value={spec}>{spec}</option>
-                  ))}
+                  {SPECIALITIES.map((spec) => (<option key={spec} value={spec}>{spec}</option>))}
                 </select>
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Иш жойи</label>
-                <input
-                  type="text"
-                  value={formData.workplace}
-                  onChange={(e) => setFormData({...formData, workplace: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="text" value={formData.workplace} onChange={(e) => setFormData({...formData, workplace: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Карта рақами</label>
-                <input
-                  type="text"
-                  value={formData.cardNumber}
-                  onChange={(e) => setFormData({...formData, cardNumber: e.target.value})}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="text" value={formData.cardNumber} onChange={(e) => setFormData({...formData, cardNumber: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Карта эгаси</label>
-                <input
-                  type="text"
-                  value={formData.cardHolder}
-                  onChange={(e) => setFormData({...formData, cardHolder: e.target.value})}
-                  placeholder="Карта эгасининг FIO"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
+                <input type="text" value={formData.cardHolder} onChange={(e) => setFormData({...formData, cardHolder: e.target.value})} placeholder="Карта эгасининг FIO" style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }} />
               </div>
+              
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Вилоят</label>
                 <select
@@ -805,16 +753,17 @@ const Doctors: React.FC = () => {
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                 >
                   <option value="">Танланг</option>
-                  {Object.keys(REGIONS_DATA).map((region) => (
+                  {regionOptions.map((region) => (
                     <option key={region} value={region}>{region}</option>
                   ))}
                 </select>
               </div>
+
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Туман</label>
                 <select
                   value={formData.district}
-                  onChange={(e) => setFormData({...formData, district: e.target.value})}
+                  onChange={(e) => handleDistrictChange(e.target.value)}
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                   disabled={!formData.region}
                 >
@@ -824,38 +773,10 @@ const Doctors: React.FC = () => {
                   ))}
                 </select>
               </div>
+
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditingId(null);
-                    setFormData({ name: '', phone: '', speciality: '', workplace: '', cardNumber: '', cardHolder: '', region: '', district: '', mpId: '', projectId: '', telegramId: '', birthdate: '' });
-                    setDistricts([]);
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#e8ecf1',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Бекор қилиш
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: '8px 16px',
-                    background: '#667eea',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {editingId ? 'Янгилаш' : 'Сақлаш'}
-                </button>
+                <button type="button" onClick={() => { setShowModal(false); resetForm(); setEditingId(null); }} style={{ padding: '8px 16px', background: '#e8ecf1', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Бекор</button>
+                <button type="submit" style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{editingId ? 'Янгилаш' : 'Сақлаш'}</button>
               </div>
             </form>
           </div>

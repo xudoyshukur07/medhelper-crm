@@ -1,0 +1,23 @@
+﻿rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Foydalanuvchilar
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // SRM ma'lumotlar (district bo'yicha)
+    match /srm_data/{document} {
+      allow read: if request.auth != null && 
+                   resource.data.districtId == request.auth.token.districtId;
+      allow write: if request.auth != null && 
+                    request.resource.data.districtId == request.auth.token.districtId;
+    }
+    
+    // Districtlar
+    match /districts/{districtId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+  }
+}

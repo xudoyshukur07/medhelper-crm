@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { db, auth } from '../firebase/config';
+import { db, auth } from '../firebase';
 import {
   collection,
   addDoc,
@@ -1330,3 +1330,4 @@ const Groups: React.FC = () => {
 };
 
 export default Groups;
+

@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../firebase/config';
+import { db } from '../firebase';
 import {
   collection,
   addDoc,
@@ -1349,3 +1349,4 @@ const Prescriptions: React.FC = () => {
 };
 
 export default Prescriptions;
+

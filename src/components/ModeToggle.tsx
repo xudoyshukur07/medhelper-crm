@@ -1,29 +1,69 @@
 ﻿import React, { useState, useEffect } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 
 interface ModeToggleProps {
   onModeChange?: (mode: 'mobile' | 'desktop') => void;
 }
 
 const ModeToggle: React.FC<ModeToggleProps> = ({ onModeChange }) => {
-  const [mode, setMode] = useState<'mobile' | 'desktop'>(
-    () => (localStorage.getItem('viewMode') as 'mobile' | 'desktop') || 'desktop'
-  );
+  const { user, firebaseUser } = useAuth();
+  const [mode, setMode] = useState<'mobile' | 'desktop'>('desktop');
 
+  // Firebase dan viewMode ni o'qish
   useEffect(() => {
-    localStorage.setItem('viewMode', mode);
-    document.documentElement.setAttribute('data-view-mode', mode);
-    if (onModeChange) onModeChange(mode);
+    const loadMode = async () => {
+      if (firebaseUser) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.settings?.viewMode) {
+              const savedMode = data.settings.viewMode as 'mobile' | 'desktop';
+              setMode(savedMode);
+              document.documentElement.setAttribute('data-view-mode', savedMode);
+              if (onModeChange) onModeChange(savedMode);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('ViewMode yuklashda xatolik:', error);
+        }
+      }
+      // Default: desktop
+      setMode('desktop');
+    };
+    loadMode();
+  }, [firebaseUser, onModeChange]);
+
+  const toggleMode = async () => {
+    const newMode = mode === 'desktop' ? 'mobile' : 'desktop';
+    setMode(newMode);
+    document.documentElement.setAttribute('data-view-mode', newMode);
     
+    if (onModeChange) onModeChange(newMode);
+
     // Mobil rejimda body ga class qo'shish
-    if (mode === 'mobile') {
+    if (newMode === 'mobile') {
       document.body.classList.add('mobile-view');
     } else {
       document.body.classList.remove('mobile-view');
     }
-  }, [mode, onModeChange]);
 
-  const toggleMode = () => {
-    setMode(prev => prev === 'desktop' ? 'mobile' : 'desktop');
+    // Firebase ga saqlash
+    if (firebaseUser) {
+      try {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        await setDoc(userRef, {
+          settings: {
+            viewMode: newMode
+          }
+        }, { merge: true });
+      } catch (error) {
+        console.error('ViewMode saqlashda xatolik:', error);
+      }
+    }
   };
 
   return (
@@ -50,7 +90,7 @@ const ModeToggle: React.FC<ModeToggleProps> = ({ onModeChange }) => {
     >
       <span>{mode === 'desktop' ? '💻' : '📱'}</span>
       <span>{mode === 'desktop' ? 'Desktop' : 'Mobil'}</span>
-      <span style={{ 
+      <span style={{
         display: 'inline-block',
         width: '24px',
         height: '14px',

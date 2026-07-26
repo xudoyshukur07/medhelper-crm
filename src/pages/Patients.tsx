@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { db } from '../firebase/config';
+import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { auth } from '../firebase/config';
+import { auth } from '../firebase';
 
 interface Patient {
   id: string;
@@ -215,3 +215,4 @@ const Patients: React.FC = () => {
 };
 
 export default Patients;
+

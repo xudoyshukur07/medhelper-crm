@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { useAuth, hasPermission } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import {
   collection,
@@ -17,41 +17,73 @@ import {
 interface Region {
   id: string;
   name: string;
+  isActive: boolean;
+}
+
+interface District {
+  id: string;
+  name: string;
+  regionId: string;
+  regionName: string;
   order: number;
   isActive: boolean;
   createdAt: any;
   updatedAt?: any;
 }
 
-const Regions: React.FC = () => {
+const Districts: React.FC = () => {
   const { user } = useAuth();
+  const [districts, setDistricts] = useState<District[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', order: 0, isActive: true });
+  const [formData, setFormData] = useState({
+    name: '',
+    regionId: '',
+    order: 0,
+    isActive: true
+  });
 
   const canManage = user?.role === 'superadmin' || user?.role === 'seo';
 
   useEffect(() => {
     if (!canManage) return;
 
-    const q = query(collection(db, 'regions'), orderBy('order', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Region));
-      setRegions(data);
-      setLoading(false);
-    }, (error) => {
-      setError('Xatolik: ' + error.message);
-      setLoading(false);
-    });
+    // Tumanlarni yuklash
+    const districtsUnsubscribe = onSnapshot(
+      query(collection(db, 'districts'), orderBy('order', 'asc')),
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as District));
+        setDistricts(data);
+        setLoading(false);
+      },
+      (error) => {
+        setError('Xatolik: ' + error.message);
+        setLoading(false);
+      }
+    );
 
-    return () => unsubscribe();
+    // Viloyatlarni yuklash
+    const regionsUnsubscribe = onSnapshot(
+      query(collection(db, 'regions'), where('isActive', '==', true)),
+      (snapshot) => {
+        setRegions(snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Region)));
+      }
+    );
+
+    return () => {
+      districtsUnsubscribe();
+      regionsUnsubscribe();
+    };
   }, [canManage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,27 +92,38 @@ const Regions: React.FC = () => {
     setSuccess('');
 
     if (!formData.name.trim()) {
-      setError('Viloyat nomini kiriting!');
+      setError('Tuman nomini kiriting!');
       return;
     }
 
+    if (!formData.regionId) {
+      setError('Viloyatni tanlang!');
+      return;
+    }
+
+    const region = regions.find(r => r.id === formData.regionId);
+
     try {
       if (editingId) {
-        await updateDoc(doc(db, 'regions', editingId), {
+        await updateDoc(doc(db, 'districts', editingId), {
           name: formData.name,
+          regionId: formData.regionId,
+          regionName: region?.name || '',
           order: formData.order || 0,
           isActive: formData.isActive,
           updatedAt: serverTimestamp()
         });
-        setSuccess('✅ Viloyat yangilandi!');
+        setSuccess('✅ Tuman yangilandi!');
       } else {
-        await addDoc(collection(db, 'regions'), {
+        await addDoc(collection(db, 'districts'), {
           name: formData.name,
+          regionId: formData.regionId,
+          regionName: region?.name || '',
           order: formData.order || 0,
           isActive: formData.isActive,
           createdAt: serverTimestamp()
         });
-        setSuccess('✅ Viloyat qo\'shildi!');
+        setSuccess('✅ Tuman qo\'shildi!');
       }
       setShowModal(false);
       resetForm();
@@ -90,27 +133,28 @@ const Regions: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Ушбу viloyatni o\'chirmoqchimisiz?')) return;
+    if (!confirm('Ушбу tumani o\'chirmoqchimisiz?')) return;
     try {
-      await deleteDoc(doc(db, 'regions', id));
-      setSuccess('✅ Viloyat o\'chirildi!');
+      await deleteDoc(doc(db, 'districts', id));
+      setSuccess('✅ Tuman o\'chirildi!');
     } catch (err: any) {
       setError('Xatolik: ' + err.message);
     }
   };
 
-  const handleEdit = (region: Region) => {
-    setEditingId(region.id);
+  const handleEdit = (district: District) => {
+    setEditingId(district.id);
     setFormData({
-      name: region.name,
-      order: region.order || 0,
-      isActive: region.isActive !== undefined ? region.isActive : true
+      name: district.name,
+      regionId: district.regionId,
+      order: district.order || 0,
+      isActive: district.isActive !== undefined ? district.isActive : true
     });
     setShowModal(true);
   };
 
   const resetForm = () => {
-    setFormData({ name: '', order: 0, isActive: true });
+    setFormData({ name: '', regionId: '', order: 0, isActive: true });
     setEditingId(null);
   };
 
@@ -118,7 +162,7 @@ const Regions: React.FC = () => {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
         <h2>⛔ Ҳуқуқингиз йўқ</h2>
-        <p>Viloyatларни бошқариш учун ҳуқуқингиз етарли эмас</p>
+        <p>Tumanlarни бошқариш учун ҳуқуқингиз етарли эмас</p>
       </div>
     );
   }
@@ -130,11 +174,11 @@ const Regions: React.FC = () => {
   return (
     <div style={{ padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>🏢 Viloyatlar boshqaruvi</h2>
+        <h2>📍 Tumanlar boshqaruvi</h2>
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
           style={{ padding: '10px 20px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-        >➕ Viloyat qo'shish</button>
+        >➕ Tuman qo'shish</button>
       </div>
 
       {error && <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>❌ {error}</div>}
@@ -146,33 +190,39 @@ const Regions: React.FC = () => {
             <tr>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>№</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Номи</th>
+              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Viloyat</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Тартиб</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Ҳолат</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Ҳаракатлар</th>
             </tr>
           </thead>
           <tbody>
-            {regions.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>Ҳеч қандай viloyat топилмади</td></tr>
+            {districts.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>Ҳеч қандай tuman топилмади</td></tr>
             ) : (
-              regions.map((r, index) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              districts.map((d, index) => (
+                <tr key={d.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                   <td style={{ padding: '10px 14px' }}>{index + 1}</td>
-                  <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{r.name}</td>
-                  <td style={{ padding: '10px 14px' }}>{r.order || '-'}</td>
+                  <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{d.name}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    <span style={{ padding: '2px 10px', borderRadius: '4px', background: '#e8ecf1', fontSize: '12px' }}>
+                      {d.regionName || d.regionId || '-'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 14px' }}>{d.order || '-'}</td>
                   <td style={{ padding: '10px 14px' }}>
                     <span style={{
                       padding: '2px 10px',
                       borderRadius: '4px',
-                      background: r.isActive !== false ? '#d4edda' : '#f8d7da',
-                      color: r.isActive !== false ? '#155724' : '#721c24'
+                      background: d.isActive !== false ? '#d4edda' : '#f8d7da',
+                      color: d.isActive !== false ? '#155724' : '#721c24'
                     }}>
-                      {r.isActive !== false ? '✅ Фаол' : '❌ Фаол эмас'}
+                      {d.isActive !== false ? '✅ Фаол' : '❌ Фаол эмас'}
                     </span>
                   </td>
                   <td style={{ padding: '10px 14px' }}>
-                    <button onClick={() => handleEdit(r)} style={{ padding: '4px 12px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
-                    <button onClick={() => handleDelete(r.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
+                    <button onClick={() => handleEdit(d)} style={{ padding: '4px 12px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
+                    <button onClick={() => handleDelete(d.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
                   </td>
                 </tr>
               ))
@@ -202,7 +252,7 @@ const Regions: React.FC = () => {
             maxWidth: '450px',
             width: '90%'
           }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>{editingId ? '✏️ Viloyatni tahrirlash' : '➕ Yangi viloyat qo\'shish'}</h3>
+            <h3 style={{ marginTop: 0 }}>{editingId ? '✏️ Tumani tahrirlash' : '➕ Yangi tuman qo\'shish'}</h3>
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Номи *</label>
@@ -213,6 +263,20 @@ const Regions: React.FC = () => {
                   required
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                 />
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Viloyat *</label>
+                <select
+                  value={formData.regionId}
+                  onChange={(e) => setFormData({...formData, regionId: e.target.value})}
+                  required
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                >
+                  <option value="">Viloyat tanlang</option>
+                  {regions.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Тартиб</label>
@@ -253,4 +317,4 @@ const Regions: React.FC = () => {
   );
 };
 
-export default Regions;
+export default Districts;

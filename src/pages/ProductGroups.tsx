@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { useAuth, hasPermission } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import {
   collection,
@@ -14,37 +14,36 @@ import {
   orderBy
 } from 'firebase/firestore';
 
-interface Region {
+interface ProductGroup {
   id: string;
   name: string;
-  order: number;
   isActive: boolean;
   createdAt: any;
   updatedAt?: any;
 }
 
-const Regions: React.FC = () => {
+const ProductGroups: React.FC = () => {
   const { user } = useAuth();
-  const [regions, setRegions] = useState<Region[]>([]);
+  const [groups, setGroups] = useState<ProductGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', order: 0, isActive: true });
+  const [formData, setFormData] = useState({ name: '', isActive: true });
 
-  const canManage = user?.role === 'superadmin' || user?.role === 'seo';
+  const canManage = user?.role === 'superadmin' || user?.role === 'seo' || user?.role === 'pm';
 
   useEffect(() => {
     if (!canManage) return;
 
-    const q = query(collection(db, 'regions'), orderBy('order', 'asc'));
+    const q = query(collection(db, 'productGroups'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      } as Region));
-      setRegions(data);
+      } as ProductGroup));
+      setGroups(data);
       setLoading(false);
     }, (error) => {
       setError('Xatolik: ' + error.message);
@@ -60,27 +59,25 @@ const Regions: React.FC = () => {
     setSuccess('');
 
     if (!formData.name.trim()) {
-      setError('Viloyat nomini kiriting!');
+      setError('Guruh nomini kiriting!');
       return;
     }
 
     try {
       if (editingId) {
-        await updateDoc(doc(db, 'regions', editingId), {
+        await updateDoc(doc(db, 'productGroups', editingId), {
           name: formData.name,
-          order: formData.order || 0,
           isActive: formData.isActive,
           updatedAt: serverTimestamp()
         });
-        setSuccess('✅ Viloyat yangilandi!');
+        setSuccess('✅ Guruh yangilandi!');
       } else {
-        await addDoc(collection(db, 'regions'), {
+        await addDoc(collection(db, 'productGroups'), {
           name: formData.name,
-          order: formData.order || 0,
           isActive: formData.isActive,
           createdAt: serverTimestamp()
         });
-        setSuccess('✅ Viloyat qo\'shildi!');
+        setSuccess('✅ Guruh qo\'shildi!');
       }
       setShowModal(false);
       resetForm();
@@ -90,27 +87,26 @@ const Regions: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Ушбу viloyatni o\'chirmoqchimisiz?')) return;
+    if (!confirm('Ушбу guruhni o\'chirmoqchimisiz?')) return;
     try {
-      await deleteDoc(doc(db, 'regions', id));
-      setSuccess('✅ Viloyat o\'chirildi!');
+      await deleteDoc(doc(db, 'productGroups', id));
+      setSuccess('✅ Guruh o\'chirildi!');
     } catch (err: any) {
       setError('Xatolik: ' + err.message);
     }
   };
 
-  const handleEdit = (region: Region) => {
-    setEditingId(region.id);
+  const handleEdit = (group: ProductGroup) => {
+    setEditingId(group.id);
     setFormData({
-      name: region.name,
-      order: region.order || 0,
-      isActive: region.isActive !== undefined ? region.isActive : true
+      name: group.name,
+      isActive: group.isActive !== undefined ? group.isActive : true
     });
     setShowModal(true);
   };
 
   const resetForm = () => {
-    setFormData({ name: '', order: 0, isActive: true });
+    setFormData({ name: '', isActive: true });
     setEditingId(null);
   };
 
@@ -118,7 +114,7 @@ const Regions: React.FC = () => {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
         <h2>⛔ Ҳуқуқингиз йўқ</h2>
-        <p>Viloyatларни бошқариш учун ҳуқуқингиз етарли эмас</p>
+        <p>Препарат гуруҳларини бошқариш учун ҳуқуқингиз етарли эмас</p>
       </div>
     );
   }
@@ -130,11 +126,11 @@ const Regions: React.FC = () => {
   return (
     <div style={{ padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>🏢 Viloyatlar boshqaruvi</h2>
+        <h2>💊 Препарат гуруҳлари</h2>
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
           style={{ padding: '10px 20px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-        >➕ Viloyat qo'shish</button>
+        >➕ Guruh qo'shish</button>
       </div>
 
       {error && <div style={{ background: '#fee', color: '#c33', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>❌ {error}</div>}
@@ -146,33 +142,31 @@ const Regions: React.FC = () => {
             <tr>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>№</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Номи</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left' }}>Тартиб</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Ҳолат</th>
               <th style={{ padding: '10px 14px', textAlign: 'left' }}>Ҳаракатлар</th>
             </tr>
           </thead>
           <tbody>
-            {regions.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>Ҳеч қандай viloyat топилмади</td></tr>
+            {groups.length === 0 ? (
+              <tr><td colSpan={4} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>Ҳеч қандай guruh топилмади</td></tr>
             ) : (
-              regions.map((r, index) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              groups.map((g, index) => (
+                <tr key={g.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                   <td style={{ padding: '10px 14px' }}>{index + 1}</td>
-                  <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{r.name}</td>
-                  <td style={{ padding: '10px 14px' }}>{r.order || '-'}</td>
+                  <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{g.name}</td>
                   <td style={{ padding: '10px 14px' }}>
                     <span style={{
                       padding: '2px 10px',
                       borderRadius: '4px',
-                      background: r.isActive !== false ? '#d4edda' : '#f8d7da',
-                      color: r.isActive !== false ? '#155724' : '#721c24'
+                      background: g.isActive !== false ? '#d4edda' : '#f8d7da',
+                      color: g.isActive !== false ? '#155724' : '#721c24'
                     }}>
-                      {r.isActive !== false ? '✅ Фаол' : '❌ Фаол эмас'}
+                      {g.isActive !== false ? '✅ Фаол' : '❌ Фаол эмас'}
                     </span>
                   </td>
                   <td style={{ padding: '10px 14px' }}>
-                    <button onClick={() => handleEdit(r)} style={{ padding: '4px 12px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
-                    <button onClick={() => handleDelete(r.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
+                    <button onClick={() => handleEdit(g)} style={{ padding: '4px 12px', background: '#cce5ff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '4px' }}>✏️</button>
+                    <button onClick={() => handleDelete(g.id)} style={{ padding: '4px 8px', background: '#f8d7da', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🗑️</button>
                   </td>
                 </tr>
               ))
@@ -202,7 +196,7 @@ const Regions: React.FC = () => {
             maxWidth: '450px',
             width: '90%'
           }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0 }}>{editingId ? '✏️ Viloyatni tahrirlash' : '➕ Yangi viloyat qo\'shish'}</h3>
+            <h3 style={{ marginTop: 0 }}>{editingId ? '✏️ Guruhni tahrirlash' : '➕ Yangi guruh qo\'shish'}</h3>
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Номи *</label>
@@ -211,15 +205,6 @@ const Regions: React.FC = () => {
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   required
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                />
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Тартиб</label>
-                <input
-                  type="number"
-                  value={formData.order}
-                  onChange={(e) => setFormData({...formData, order: Number(e.target.value)})}
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                 />
               </div>
@@ -253,4 +238,4 @@ const Regions: React.FC = () => {
   );
 };
 
-export default Regions;
+export default ProductGroups;

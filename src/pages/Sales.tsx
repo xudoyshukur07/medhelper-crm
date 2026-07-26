@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
-import { db, auth } from '../firebase/config';
+import { db, auth } from '../firebase';
 import {
   collection,
   addDoc,
@@ -1020,3 +1020,4 @@ const Sales: React.FC = () => {
 };
 
 export default Sales;
+
