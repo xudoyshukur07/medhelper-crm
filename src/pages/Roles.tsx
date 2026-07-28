@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import {
@@ -10,7 +10,8 @@ import {
   query,
   onSnapshot,
   serverTimestamp,
-  where
+  where,
+  getDocs
 } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 
@@ -297,6 +298,9 @@ const Roles: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  
+  // ✅ DEFAULT ROLLAR YARATILGANLIGINI TEKSHIRISH UCHUN REF
+  const defaultRolesCreated = useRef(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -335,6 +339,11 @@ const Roles: React.FC = () => {
         } as Role));
         setRoles(data);
         setLoading(false);
+        
+        // ✅ FAQAT ROLLAR BO'SH BO'LSA VA HALI YARATILMAGAN BO'LSA
+        if (data.length === 0 && !defaultRolesCreated.current) {
+          createDefaultRoles();
+        }
       },
       (error) => {
         console.error('❌ Rollar yuklashda xatolik:', error);
@@ -359,27 +368,42 @@ const Roles: React.FC = () => {
     };
   }, []);
 
-  // ============ CREATE DEFAULT ROLES ============
+  // ============ CREATE DEFAULT ROLES (FAQAT BIR MARTA) ============
   const createDefaultRoles = async () => {
-    if (roles.length > 0) return;
+    // ✅ Agar allaqachon yaratilgan bo'lsa, qayta yaratma
+    if (defaultRolesCreated.current) {
+      console.log('✅ Default rollar allaqachon yaratilgan');
+      return;
+    }
 
     try {
+      let createdCount = 0;
       for (const role of DEFAULT_ROLES) {
         await addDoc(collection(db, 'roles'), {
           ...role,
           createdAt: serverTimestamp(),
           createdBy: user?.uid || 'system',
         });
+        createdCount++;
+        console.log(`✅ Rol yaratildi: ${role.label}`);
       }
-      setSuccess('✅ Default rollar yaratildi!');
+      
+      defaultRolesCreated.current = true;
+      setSuccess(`✅ ${createdCount} ta default rol yaratildi!`);
+      
+      // Rollarni qayta yuklash
+      const snapshot = await getDocs(collection(db, 'roles'));
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Role));
+      setRoles(data);
+      
     } catch (error: any) {
+      console.error('❌ Xatolik:', error);
       setError('❌ Xatolik: ' + error.message);
     }
   };
-
-  useEffect(() => {
-    createDefaultRoles();
-  }, [roles]);
 
   // ============ CRUD ============
   const handleSave = async () => {
