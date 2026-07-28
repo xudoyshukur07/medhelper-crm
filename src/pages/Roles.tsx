@@ -328,8 +328,11 @@ const Roles: React.FC = () => {
 
   const canManageRoles = user?.role === 'superadmin' || user?.role === 'admin';
 
-  // ============ LOAD DATA ============
+  // ============ LOAD DATA (FAQAT BIR MARTA) ============
   useEffect(() => {
+    // ✅ LOCAL FLAG - default rollar yaratilganligini tekshirish
+    let isDefaultCreated = false;
+
     const rolesUnsubscribe = onSnapshot(
       collection(db, 'roles'),
       (snapshot) => {
@@ -341,8 +344,13 @@ const Roles: React.FC = () => {
         setLoading(false);
         
         // ✅ FAQAT ROLLAR BO'SH BO'LSA VA HALI YARATILMAGAN BO'LSA
-        if (data.length === 0 && !defaultRolesCreated.current) {
-          createDefaultRoles();
+        if (data.length === 0 && !isDefaultCreated && !defaultRolesCreated.current) {
+          isDefaultCreated = true;
+          defaultRolesCreated.current = true;
+          // ⚠️ BU YERDA createDefaultRoles() CHAQIRILMAYDI!
+          // Qo'lda yaratish kerak bo'lsa, quyidagi qatorni oching:
+          // createDefaultRoles();
+          console.log('ℹ️ Rollar bo\'sh, lekin avtomatik yaratish o\'chirilgan');
         }
       },
       (error) => {
@@ -366,9 +374,9 @@ const Roles: React.FC = () => {
       rolesUnsubscribe();
       usersUnsubscribe();
     };
-  }, []);
+  }, []); // ✅ BO'SH DEPENDENCY ARRAY - FAQAT BIR MARTA ISHLAYDI
 
-  // ============ CREATE DEFAULT ROLES (FAQAT BIR MARTA) ============
+  // ============ DEFAULT ROLLARNI QO'LDA YARATISH ============
   const createDefaultRoles = async () => {
     // ✅ Agar allaqachon yaratilgan bo'lsa, qayta yaratma
     if (defaultRolesCreated.current) {
@@ -452,6 +460,11 @@ const Roles: React.FC = () => {
   };
 
   const handleEdit = (role: Role) => {
+    // ✅ Super Admin ni himoya qilish
+    if (role.name === 'superadmin') {
+      setError('⚠️ Super Admin rolini tahrirlab bo\'lmaydi!');
+      return;
+    }
     setEditingRole(role);
     setFormData({
       name: role.name,
@@ -462,6 +475,7 @@ const Roles: React.FC = () => {
       isActive: role.isActive,
     });
     setShowModal(true);
+    setError('');
   };
 
   const resetForm = () => {
@@ -593,6 +607,22 @@ const Roles: React.FC = () => {
           >
             ➕ Rol qo'shish
           </button>
+          
+          {/* ✅ Default rollarni qo'lda yaratish tugmasi */}
+          <button
+            onClick={createDefaultRoles}
+            style={{ 
+              padding: '10px 20px', 
+              background: '#28a745', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '8px', 
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            🔄 Default rollarni yaratish
+          </button>
         </div>
       </div>
 
@@ -605,6 +635,21 @@ const Roles: React.FC = () => {
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px 20px', color: '#999', background: 'white', borderRadius: '12px' }}>
             <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎭</div>
             <p>Hech qanday rol topilmadi</p>
+            <button
+              onClick={createDefaultRoles}
+              style={{ 
+                marginTop: '16px',
+                padding: '10px 24px', 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: '8px', 
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              📥 Default rollarni yaratish
+            </button>
           </div>
         ) : (
           filteredRoles.map((role) => {
@@ -688,7 +733,8 @@ const Roles: React.FC = () => {
                   )}
                 </div>
 
-                {!role.isSystem && (
+                {/* Tahrirlash va o'chirish tugmalari - Super Admin dan boshqa */}
+                {role.name !== 'superadmin' && (
                   <div style={{ 
                     display: 'flex', 
                     gap: '4px', 
@@ -702,12 +748,26 @@ const Roles: React.FC = () => {
                     >
                       ✏️ Tahrirlash
                     </button>
-                    <button
-                      onClick={() => handleDelete(role)}
-                      style={{ padding: '4px 12px', background: '#f8d7da', color: '#721c24', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-                    >
-                      🗑️ O'chirish
-                    </button>
+                    {!role.isSystem && (
+                      <button
+                        onClick={() => handleDelete(role)}
+                        style={{ padding: '4px 12px', background: '#f8d7da', color: '#721c24', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        🗑️ O'chirish
+                      </button>
+                    )}
+                  </div>
+                )}
+                {role.name === 'superadmin' && (
+                  <div style={{ 
+                    marginTop: '12px',
+                    borderTop: '1px solid #f0f0f0',
+                    paddingTop: '10px',
+                    fontSize: '12px',
+                    color: '#888',
+                    textAlign: 'center'
+                  }}>
+                    🔒 Himoyalangan
                   </div>
                 )}
               </div>
