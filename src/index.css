@@ -225,6 +225,122 @@ html, body {
   overflow-y: auto;
 }
 
+/* ============================================================
+   DARK MODE THEME
+   ============================================================ */
+
+/* Light mode (default) */
+:root {
+  --bg-primary: #f0f2f5;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #f0f0f0;
+  --text-primary: #1a1a2e;
+  --text-secondary: #333333;
+  --text-muted: #666666;
+  --text-light: #888888;
+  --border-color: #e0e0e0;
+  --shadow-color: rgba(0,0,0,0.05);
+  --sidebar-bg: #1a1a2e;
+  --sidebar-text: #ffffff;
+  --sidebar-hover: #2a2a4e;
+}
+
+/* Dark mode */
+[data-theme="dark"] {
+  --bg-primary: #12121a;
+  --bg-secondary: #1a1a2e;
+  --bg-card: #1e1e32;
+  --bg-input: #2a2a4e;
+  --bg-hover: #2a2a4e;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --text-muted: #aaaaaa;
+  --text-light: #888888;
+  --border-color: #333355;
+  --shadow-color: rgba(0,0,0,0.3);
+  --sidebar-bg: #0f0f1a;
+  --sidebar-text: #ffffff;
+  --sidebar-hover: #2a2a4e;
+}
+
+body.dark-theme {
+  background: #12121a;
+  color: #ffffff;
+}
+
+/* Dark mode card */
+[data-theme="dark"] .card,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .form-group textarea {
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .table th {
+  background: #2a2a4e !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .table td {
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table tr:hover {
+  background: #2a2a4e !important;
+}
+
+/* Dark mode input */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+  border-color: #667eea !important;
+  outline: none;
+}
+
+/* Dark mode button */
+[data-theme="dark"] .btn-secondary {
+  background: #2a2a4e !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: #3a3a6e !important;
+}
+
+/* Dark mode scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 6px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #3a3a6e;
+  border-radius: 3px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #4a4a8e;
+}
 /* ============================================
    MEDIA QUERIES
    ============================================ */

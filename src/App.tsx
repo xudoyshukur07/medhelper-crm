@@ -1,7 +1,8 @@
 ﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import Layout from './components/layout/Layout';  // ← Desktop Layout
-// import MobileLayout from './components/layout/MobileLayout'; // ← O'chirildi
+import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
+import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Doctors from './pages/Doctors';
@@ -26,31 +27,35 @@ import Roles from './pages/Roles';
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="doctors" element={<Doctors />} />
-            <Route path="visits" element={<Visits />} />
-            <Route path="ai-dashboard" element={<AIDashboard />} />
-            <Route path="products" element={<Products />} />
-            <Route path="groups" element={<Groups />} />
-            <Route path="sales" element={<Sales />} />
-            <Route path="investments" element={<Investments />} />
-            <Route path="prescriptions" element={<Prescriptions />} />
-            <Route path="plans" element={<Plans />} />
-            <Route path="regions" element={<Regions />} />
-            <Route path="product-groups" element={<ProductGroups />} />
-            <Route path="districts" element={<Districts />} />
-            <Route path="users" element={<Users />} />
-            <Route path="telegram" element={<TelegramBot />} />
-            <Route path="templates" element={<Templates />} />
-            <Route path="/roles" element={<Roles />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <ThemeProvider>
+        <LanguageProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="doctors" element={<Doctors />} />
+                <Route path="visits" element={<Visits />} />
+                <Route path="ai-dashboard" element={<AIDashboard />} />
+                <Route path="products" element={<Products />} />
+                <Route path="groups" element={<Groups />} />
+                <Route path="sales" element={<Sales />} />
+                <Route path="investments" element={<Investments />} />
+                <Route path="prescriptions" element={<Prescriptions />} />
+                <Route path="plans" element={<Plans />} />
+                <Route path="regions" element={<Regions />} />
+                <Route path="product-groups" element={<ProductGroups />} />
+                <Route path="districts" element={<Districts />} />
+                <Route path="users" element={<Users />} />
+                <Route path="telegram" element={<TelegramBot />} />
+                <Route path="templates" element={<Templates />} />
+                <Route path="/roles" element={<Roles />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </LanguageProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

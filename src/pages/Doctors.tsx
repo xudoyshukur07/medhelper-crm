@@ -12,7 +12,8 @@ import {
   query,
   orderBy,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  getDocs
 } from 'firebase/firestore';
 import { auth } from '../firebase';
 
@@ -62,6 +63,7 @@ const Doctors: React.FC = () => {
   const { user } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -147,10 +149,58 @@ const Doctors: React.FC = () => {
   };
 
   // ============================================
+  // 🔧 BARCHA VRACHLARNI BIR TUGMA BILAN YANGILASH
+  // ============================================
+  const updateAllDoctors = async () => {
+    if (!confirm(`Barcha ${doctors.length} ta vrachning districtId larini yangilamoqchimisiz?`)) return;
+
+    setUpdating(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      for (const doctor of doctors) {
+        const matchedDistrict = districtsData.find(d => 
+          normalizeName(d.name) === normalizeName(doctor.district)
+        );
+
+        if (matchedDistrict && matchedDistrict.id !== doctor.districtId) {
+          await updateDoc(doc(db, 'doctors', doctor.id), {
+            districtId: matchedDistrict.id,
+            updatedAt: serverTimestamp()
+          });
+          updatedCount++;
+          console.log(`✅ Yangilandi: ${doctor.name} -> districtId: ${matchedDistrict.id}`);
+        } else if (!matchedDistrict) {
+          skippedCount++;
+          console.log(`⚠️ Topilmadi: ${doctor.name} (district: ${doctor.district})`);
+        }
+      }
+
+      setSuccess(`✅ ${updatedCount} ta vrach yangilandi! ${skippedCount > 0 ? `⚠️ ${skippedCount} ta topilmadi` : ''}`);
+      
+      const snapshot = await getDocs(collection(db, 'doctors'));
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Doctor));
+      setDoctors(data);
+
+    } catch (error: any) {
+      console.error('Xatolik:', error);
+      setError('❌ Xatolik: ' + error.message);
+    }
+
+    setUpdating(false);
+  };
+
+  // ============================================
   // FIREBASE LISTENER
   // ============================================
 
-  // Districtlarni yuklash
   useEffect(() => {
     console.log('📡 Districtlarni yuklash...');
     const unsubscribe = onSnapshot(collection(db, 'districts'), (snapshot) => {
@@ -166,7 +216,6 @@ const Doctors: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Vrachlarni yuklash
   useEffect(() => {
     const q = query(collection(db, 'doctors'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -183,10 +232,9 @@ const Doctors: React.FC = () => {
   }, []);
 
   // ============================================
-  // VILOYAT VA TUMAN (FIREBASE DAN)
+  // VILOYAT VA TUMAN
   // ============================================
 
-  // Viloyat tanlanganda
   const handleRegionChange = (regionName: string) => {
     setFormData({ ...formData, region: regionName, district: '', districtId: '' });
     const filtered = districtsData
@@ -196,7 +244,6 @@ const Doctors: React.FC = () => {
     console.log('✅ Viloyat tanlandi:', regionName, 'Tumanlar:', filtered.length, 'ta');
   };
 
-  // Tuman tanlanganda
   const handleDistrictChange = (districtName: string) => {
     console.log('🔍 Tanlangan tuman:', districtName);
     const normalizedInput = normalizeName(districtName);
@@ -441,7 +488,7 @@ const Doctors: React.FC = () => {
   };
 
   // ============================================
-  // FILTR - DISTRICT ID (BARCHA ROLLAR UCHUN)
+  // FILTR
   // ============================================
 
   const getFilteredDoctors = () => {
@@ -456,37 +503,27 @@ const Doctors: React.FC = () => {
 
     if (user) {
       const userRole = user.role;
-      
-      // ===== BARCHA TARGET DISTRICTS =====
       let targetDistricts: string[] = [];
       
-      // 1. districtIds (Firestore array) - MP da ishlatiladi
       if (user.districtIds && Array.isArray(user.districtIds) && user.districtIds.length > 0) {
         targetDistricts = user.districtIds;
         console.log('✅ districtIds array dan olindi:', targetDistricts.length, 'ta');
-      }
-      // 2. districts (Firestore array) - RM/FFM da ishlatiladi
-      else if (user.districts && Array.isArray(user.districts) && user.districts.length > 0) {
+      } else if (user.districts && Array.isArray(user.districts) && user.districts.length > 0) {
         if (typeof user.districts[0] === 'string') {
           targetDistricts = user.districts;
         } else if (typeof user.districts[0] === 'object') {
           targetDistricts = user.districts.map((d: any) => d.id || d).filter(Boolean);
         }
         console.log('✅ districts array dan olindi:', targetDistricts.length, 'ta');
-      }
-      // 3. districtId (string) - MP da bitta tuman
-      else if (user.districtId) {
+      } else if (user.districtId) {
         targetDistricts = [user.districtId];
         console.log('✅ districtId dan olindi:', targetDistricts);
       }
 
       console.log('🎯 Target districts:', targetDistricts);
 
-      // ===== FILTR QO'LLASH =====
-      // MP, RM, FFM uchun filtr
       if (['mp', 'rm', 'ffm'].includes(userRole) && targetDistricts.length > 0) {
         console.log(`✅ ${userRole.toUpperCase()} filtr qo'llanilmoqda`);
-        
         filtered = filtered.filter(doc => {
           const docDistrictId = doc.districtId || doc.district || '';
           const match = targetDistricts.some(td => 
@@ -499,22 +536,16 @@ const Doctors: React.FC = () => {
           }
           return match;
         });
-        
         console.log(`📊 ${filtered.length} ta vrach qoldi`);
-      } 
-      // Admin rollar - barcha vrachlar
-      else if (['superadmin', 'seo', 'hr', 'pm', 'ofm'].includes(userRole)) {
+      } else if (['superadmin', 'seo', 'hr', 'pm', 'ofm'].includes(userRole)) {
         console.log('✅ Admin barcha vrachlarni ko\'radi:', filtered.length);
-      } 
-      // Filtr qo'llanilmagan rollar
-      else {
+      } else {
         console.log(`ℹ️ ${userRole} uchun filtr qo'llanilmaydi`);
       }
     } else {
       console.log('⚠️ User mavjud emas!');
     }
 
-    // Qidiruv bo'yicha filtr
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(doc =>
@@ -607,6 +638,23 @@ const Doctors: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <h2 style={{ margin: 0 }}>👨‍⚕️ Врачлар ({filteredDoctors.length})</h2>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {/* ===== 🔧 BARCHA VRACHLARNI YANGILASH TUGMASI ===== */}
+          <button
+            onClick={updateAllDoctors}
+            disabled={updating}
+            style={{
+              padding: '8px 16px',
+              background: updating ? '#ccc' : '#f39c12',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: updating ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            {updating ? '⏳ Yangilanmoqda...' : '🔄 District ID ni yangilash'}
+          </button>
+          
           <input type="text" placeholder="🔍 Қидириш..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '200px' }} />
           <button onClick={() => setShowColumnSettings(!showColumnSettings)} style={{ padding: '8px 16px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>⚙️ Устунлар</button>
           <input type="file" accept=".xlsx,.xls" onChange={handleImport} style={{ display: 'none' }} id="importFile" />
