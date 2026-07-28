@@ -14,6 +14,7 @@ const Layout: React.FC = () => {
   const canManageUsers = hasPermission('canManageUsers');
   const canManageRegions = hasPermission('canManageRegions');
   const canManageProducts = hasPermission('canManageProducts');
+  const canManageRoles = hasPermission('canManageRoles'); // ✅ QO'SHILDI
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -26,6 +27,11 @@ const Layout: React.FC = () => {
           
           {/* ===== ASOSIY ===== */}
           <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', color: '#aaa', border: 'none', borderRadius: '8px', cursor: 'pointer', width: '100%', textAlign: 'left', fontSize: '14px' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a4e'; e.currentTarget.style.color = 'white'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#aaa'; }}>📊 Дашборд</button>
+          
+          {/* ===== ROLLAR VA RUXSATLAR (faqat Super Admin) ===== */}
+          {canManageRoles && (
+            <button onClick={() => navigate('/roles')} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', color: '#aaa', border: 'none', borderRadius: '8px', cursor: 'pointer', width: '100%', textAlign: 'left', fontSize: '14px' }} onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a4e'; e.currentTarget.style.color = 'white'; }} onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#aaa'; }}>🎭 Роллар ва Рухсатлар</button>
+          )}
           
           {/* ===== FOYDALANUVCHILAR (faqat huquqi borlar uchun) ===== */}
           {canManageUsers && (
@@ -75,6 +81,7 @@ const Layout: React.FC = () => {
         </nav>
         <div style={{ padding: '16px', borderTop: '1px solid #2a2a4e' }}>
           <div style={{ color: '#aaa', fontSize: '14px', marginBottom: '8px' }}>👤 {user?.name}</div>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>🎭 {user?.role || 'No role'}</div>
           <button onClick={handleLogout} style={{ width: '100%', padding: '8px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>🚪 Чиқиш</button>
         </div>
       </aside>

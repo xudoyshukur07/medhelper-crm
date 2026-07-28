@@ -1,7 +1,7 @@
 ﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-// import Layout from './components/layout/Layout'; // Eski Layout
-import MobileLayout from './components/layout/MobileLayout'; // Yangi MobileLayout
+import Layout from './components/layout/Layout';  // ← Desktop Layout
+// import MobileLayout from './components/layout/MobileLayout'; // ← O'chirildi
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Doctors from './pages/Doctors';
@@ -29,7 +29,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<PrivateRoute><MobileLayout /></PrivateRoute>}>
+          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="doctors" element={<Doctors />} />

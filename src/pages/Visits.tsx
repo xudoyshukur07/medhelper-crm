@@ -133,8 +133,19 @@ const extractDistrictIds = (districts: any[]): string[] => {
   return ids;
 };
 
+// ============================================================
+// YORDAMCHI FUNKSIYA: District ID ni string ga o'tkazish
+// ============================================================
+const toDistrictIdString = (value: any): string => {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    return value.id || value.code || '';
+  }
+  return String(value);
+};
+
 const Visits: React.FC = () => {
-  const { user, refreshUser } = useAuth(); // ✅ refreshUser qo'shildi
+  const { user, refreshUser } = useAuth();
   const [visits, setVisits] = useState<Visit[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -492,9 +503,8 @@ const Visits: React.FC = () => {
     loadTemplates();
   }, []);
 
-  // ============ MP LARNI YUKLASH (Manager uchun) - TUZATILGAN ============
+  // ============ MP LARNI YUKLASH (Manager uchun) ============
   useEffect(() => {
-    // ✅ User ma'lumotlarini yangilash
     refreshUser();
     
     if (user?.role === 'rm' || user?.role === 'ffm') {
@@ -502,7 +512,6 @@ const Visits: React.FC = () => {
       console.log('👥 Subordinates (yangilangan):', subordinates);
       
       if (subordinates.length > 0) {
-        // Barcha MP larni yuklab, filtrlaymiz (chunki where('uid', 'in', subordinates) ishlamaydi)
         const mpQuery = query(
           collection(db, 'users'),
           where('role', '==', 'mp')
@@ -514,7 +523,6 @@ const Visits: React.FC = () => {
             ...doc.data()
           } as User));
           
-          // Faqat subordinates dagi MP larni olish
           const filteredMps = allMps.filter(mp => 
             subordinates.includes(mp.uid)
           );
@@ -529,7 +537,7 @@ const Visits: React.FC = () => {
         console.log('⚠️ Hech qanday MP biriktirilmagan');
       }
     }
-  }, [user, refreshUser]); // ✅ refreshUser qo'shildi
+  }, [user, refreshUser]);
 
   // ============ DOCTORLARNI YUKLASH ============
 
@@ -801,7 +809,7 @@ const Visits: React.FC = () => {
   };
 
   // ============================================================
-  // VRACHLAR FILTR (TUZATILGAN)
+  // VRACHLAR FILTR (TUZATILGAN - td.includes xatoligi tuzatildi)
   // ============================================================
 
   const getAvailableDoctors = () => {
@@ -821,44 +829,56 @@ const Visits: React.FC = () => {
     console.log('📍 userDistrictIds:', userDistrictIds);
     console.log('📋 Barcha vrachlar:', doctors.length);
 
-    // Faqat MP, RM, FFM uchun filtr
     if (['mp', 'rm', 'ffm'].includes(userRole)) {
-      // ===== DISTRICT ID LARNI YIG'ISH =====
       let targetDistrictIds: string[] = [];
 
       // 1. userDistricts dan olish (obyekt yoki string)
       if (userDistricts && userDistricts.length > 0) {
-        const extracted = extractDistrictIds(userDistricts);
-        targetDistrictIds = [...targetDistrictIds, ...extracted];
+        userDistricts.forEach((d: any) => {
+          if (typeof d === 'string') {
+            if (!targetDistrictIds.includes(d)) targetDistrictIds.push(d);
+          } else if (d && typeof d === 'object') {
+            if (d.id && !targetDistrictIds.includes(d.id)) {
+              targetDistrictIds.push(d.id);
+            }
+            if (d.code && !targetDistrictIds.includes(d.code)) {
+              targetDistrictIds.push(d.code);
+            }
+          }
+        });
       }
 
-      // 2. userDistrictId dan olish (MP uchun)
-      if (userDistrictId && !targetDistrictIds.includes(userDistrictId)) {
-        targetDistrictIds.push(userDistrictId);
+      // 2. userDistrictId dan olish
+      if (userDistrictId) {
+        const id = toDistrictIdString(userDistrictId);
+        if (id && !targetDistrictIds.includes(id)) {
+          targetDistrictIds.push(id);
+        }
       }
 
-      // 3. userDistrictIds dan olish (array)
+      // 3. userDistrictIds dan olish
       if (userDistrictIds && userDistrictIds.length > 0) {
-        userDistrictIds.forEach((id: string) => {
-          if (!targetDistrictIds.includes(id)) {
+        userDistrictIds.forEach((d: any) => {
+          const id = toDistrictIdString(d);
+          if (id && !targetDistrictIds.includes(id)) {
             targetDistrictIds.push(id);
           }
         });
       }
 
-      console.log('🎯 Target district IDs:', targetDistrictIds);
+      console.log('🎯 Target district IDs (string):', targetDistrictIds);
 
-      // ===== FILTR =====
       if (targetDistrictIds.length > 0) {
         available = available.filter((doc: Doctor) => {
           const docDistrictId = doc.districtId || doc.district || '';
+          
           const match = targetDistrictIds.some((td: string) => {
-            // To'liq moslik
-            if (td === docDistrictId || td === doc.district || td === doc.districtId) {
+            const tdStr = toDistrictIdString(td);
+            
+            if (tdStr === docDistrictId || tdStr === doc.district || tdStr === doc.districtId) {
               return true;
             }
-            // Qisman moslik (agar ID lar bir-birini ichiga olsa)
-            if (docDistrictId.includes(td) || td.includes(docDistrictId)) {
+            if (docDistrictId.includes(tdStr) || tdStr.includes(docDistrictId)) {
               return true;
             }
             return false;
@@ -873,9 +893,7 @@ const Visits: React.FC = () => {
       } else {
         console.log('⚠️ District ID lar topilmadi! Barcha vrachlar ko\'rinadi.');
       }
-    }
-    // Admin rollar - barcha vrachlar
-    else {
+    } else {
       console.log('✅ Admin barcha vrachlarni ko\'radi:', available.length);
     }
     
@@ -885,13 +903,12 @@ const Visits: React.FC = () => {
   const availableDoctors = getAvailableDoctors();
 
   // ============================================================
-  // TASHRIFLAR FILTR (TUZATILGAN)
+  // TASHRIFLAR FILTR
   // ============================================================
 
   const getFilteredVisits = () => {
     let filtered = visits;
 
-    // 1. Qidiruv bo'yicha filtr
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(v =>
@@ -901,7 +918,6 @@ const Visits: React.FC = () => {
       );
     }
 
-    // 2. Rol bo'yicha filtr
     if (user) {
       const userRole = user.role;
       const userId = user.uid;
@@ -913,20 +929,16 @@ const Visits: React.FC = () => {
       console.log('📋 Tanlangan MP:', selectedMpId);
 
       if (userRole === 'mp') {
-        // MP faqat o'z tashriflari
         filtered = filtered.filter(v => v.userId === userId || v.mpId === userId);
         console.log('✅ MP filtr: faqat o\'z tashriflari,', filtered.length, 'ta');
       } 
       else if (userRole === 'rm' || userRole === 'ffm') {
-        // Manager o'z MP larining tashriflari
         let targetMpIds: string[] = [];
         
         if (selectedMpId) {
-          // Tanlangan MP
           targetMpIds = [selectedMpId];
           console.log('🎯 Tanlangan MP:', selectedMpId);
         } else if (subordinates.length > 0) {
-          // Barcha o'z MP larining tashriflari
           targetMpIds = subordinates;
           console.log('🎯 Barcha MP lar:', targetMpIds);
         }
@@ -941,18 +953,14 @@ const Visits: React.FC = () => {
           });
           console.log(`✅ ${userRole.toUpperCase()} filtr: ${filtered.length} ta tashrif qoldi`);
         } else {
-          // Hech qanday MP yo'q - o'z tashriflarini ko'rsat
           filtered = filtered.filter(v => v.userId === userId || v.mpId === userId);
           console.log(`⚠️ ${userRole.toUpperCase()} ga biriktirilgan MP lar yo'q, o'z tashriflari: ${filtered.length} ta`);
         }
-      }
-      // Admin rollar - barcha tashriflar
-      else {
+      } else {
         console.log('✅ Admin barcha tashriflarni ko\'radi:', filtered.length);
       }
     }
 
-    // 3. Vaqt bo'yicha filtr
     if (viewMode === 'day') {
       const today = formatDate(currentDate);
       filtered = filtered.filter(v => v.visitDate === today);
@@ -1096,7 +1104,6 @@ const Visits: React.FC = () => {
             style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '150px' }}
           />
           
-          {/* MP tanlash (Manager uchun) */}
           {(user?.role === 'rm' || user?.role === 'ffm') && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <label style={{ fontSize: '13px', color: '#555' }}>👤 MP:</label>
@@ -1125,7 +1132,6 @@ const Visits: React.FC = () => {
           <button onClick={() => { setShowAIModal(true); generateAIRecommendations(); }} style={{ padding: '8px 16px', background: '#764ba2', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🤖 AI режалаш</button>
           <button onClick={() => setShowExportModal(true)} style={{ padding: '8px 16px', background: '#3498db', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>📤 Экспорт</button>
           
-          {/* Tashrif qo'shish - faqat MP uchun */}
           {canAddVisit && (
             <button onClick={() => { resetForm(); setShowModal(true); }} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
               ➕ Визит қўшиш

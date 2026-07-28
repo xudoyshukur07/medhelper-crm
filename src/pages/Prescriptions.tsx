@@ -43,6 +43,7 @@ interface Prescription {
   doctorPhone: string;
   doctorRegion: string;
   doctorDistrict: string;
+  doctorDistrictId?: string;
   doctorSpeciality: string;
   patientName?: string;
   patientPhone?: string;
@@ -77,6 +78,7 @@ interface Prescription {
   printedAt?: any;
   patientId?: string;
   source: string;
+  userId?: string;
   createdAt: any;
 }
 
@@ -166,6 +168,58 @@ const DEFAULT_TEMPLATE: Omit<ReceiptTemplate, 'id'> = {
   customFields: []
 };
 
+// ============ YORDAMCHI FUNKSIYALAR ============
+
+// District ID ni string ga o'tkazish
+const toDistrictIdString = (value: any): string => {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    return value.id || value.code || '';
+  }
+  return String(value);
+};
+
+// District ID larni arraydan olish
+const extractDistrictIds = (districts: any[]): string[] => {
+  if (!districts || !Array.isArray(districts)) return [];
+  
+  const ids: string[] = [];
+  districts.forEach((item: any) => {
+    if (typeof item === 'string') {
+      ids.push(item);
+    } else if (item && typeof item === 'object') {
+      if (item.id) ids.push(item.id);
+      if (item.code && !ids.includes(item.code)) ids.push(item.code);
+    }
+  });
+  return ids;
+};
+
+// Product Group ID ni string ga o'tkazish
+const toProductGroupIdString = (value: any): string => {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    return value.id || value.code || '';
+  }
+  return String(value);
+};
+
+// Product Group ID larni arraydan olish
+const extractProductGroupIds = (groups: any[]): string[] => {
+  if (!groups || !Array.isArray(groups)) return [];
+  
+  const ids: string[] = [];
+  groups.forEach((item: any) => {
+    if (typeof item === 'string') {
+      ids.push(item);
+    } else if (item && typeof item === 'object') {
+      if (item.id) ids.push(item.id);
+      if (item.code && !ids.includes(item.code)) ids.push(item.code);
+    }
+  });
+  return ids;
+};
+
 // ============ PRESCRIPTIONS COMPONENT ============
 const Prescriptions: React.FC = () => {
   const { user } = useAuth();
@@ -219,7 +273,86 @@ const Prescriptions: React.FC = () => {
     status: 'active' as 'active' | 'used' | 'expired'
   });
 
+  // ===== FILTER STATE (YANGI QO'SHILDI) =====
+  const [filterDistrict, setFilterDistrict] = useState<string>('');
+  const [filterProductGroup, setFilterProductGroup] = useState<string>('');
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
+  const [availableProductGroups, setAvailableProductGroups] = useState<string[]>([]);
+
   const canManage = user?.role === 'superadmin' || user?.role === 'admin';
+
+  // ============================================
+  // USER DISTRICT VA PRODUCT GROUP LARNI OLISH
+  // ============================================
+  const getUserDistricts = (): string[] => {
+    if (!user) return [];
+    
+    const userDistricts = user.districts || [];
+    const userDistrictId = user.districtId;
+    const userDistrictIds = user.districtIds || [];
+    
+    let districts: string[] = [];
+    
+    console.log('🔍 getUserDistricts DEBUG:');
+    console.log('userDistricts:', userDistricts);
+    console.log('userDistrictId:', userDistrictId);
+    console.log('userDistrictIds:', userDistrictIds);
+    
+    // 1. districtIds array dan
+    if (userDistrictIds && userDistrictIds.length > 0) {
+      userDistrictIds.forEach((d: any) => {
+        const id = toDistrictIdString(d);
+        if (id && !districts.includes(id)) districts.push(id);
+      });
+    }
+    
+    // 2. districts array dan
+    if (userDistricts && userDistricts.length > 0) {
+      userDistricts.forEach((d: any) => {
+        const id = toDistrictIdString(d);
+        if (id && !districts.includes(id)) districts.push(id);
+      });
+    }
+    
+    // 3. districtId dan
+    if (userDistrictId) {
+      const id = toDistrictIdString(userDistrictId);
+      if (id && !districts.includes(id)) districts.push(id);
+    }
+    
+    console.log('📍 getUserDistricts natijasi:', districts);
+    return districts;
+  };
+
+  const getUserProductGroups = (): string[] => {
+    if (!user) return [];
+    
+    const productGroups = user.productGroupIds || [];
+    const productGroupId = user.productGroupId;
+    
+    let groups: string[] = [];
+    
+    console.log('🔍 getUserProductGroups DEBUG:');
+    console.log('user.productGroupIds:', productGroups);
+    console.log('user.productGroupId:', productGroupId);
+    
+    // 1. productGroupIds array dan
+    if (productGroups && productGroups.length > 0) {
+      productGroups.forEach((g: any) => {
+        const id = toProductGroupIdString(g);
+        if (id && !groups.includes(id)) groups.push(id);
+      });
+    }
+    
+    // 2. productGroupId dan
+    if (productGroupId) {
+      const id = toProductGroupIdString(productGroupId);
+      if (id && !groups.includes(id)) groups.push(id);
+    }
+    
+    console.log('💊 getUserProductGroups natijasi:', groups);
+    return groups;
+  };
 
   // ============ LOAD DATA ============
   useEffect(() => {
@@ -264,6 +397,15 @@ const Prescriptions: React.FC = () => {
     });
     return unsubscribe;
   }, []);
+
+  // ===== AVAILABLE DISTRICTS VA PRODUCT GROUPS NI YUKLASH =====
+  useEffect(() => {
+    const districts = [...new Set(prescriptions.map(p => p.doctorDistrict || p.doctorDistrictId).filter(Boolean))];
+    setAvailableDistricts(districts);
+    
+    const groups = [...new Set(prescriptions.map(p => p.productGroupName || p.productGroupId).filter(Boolean))];
+    setAvailableProductGroups(groups);
+  }, [prescriptions]);
 
   const createDefaultTemplate = async () => {
     try {
@@ -337,7 +479,8 @@ const Prescriptions: React.FC = () => {
           printCount: 0,
           printStatus: 'pending',
           source: 'crm',
-          createdBy: user?.id || '',
+          userId: user?.uid || '',
+          createdBy: user?.uid || '',
           createdAt: serverTimestamp()
         });
         alert('✅ Retsept yaratildi!');
@@ -429,33 +572,121 @@ const Prescriptions: React.FC = () => {
 
   const doctorStats = getDoctorStats();
 
-  // ============ FILTERED PRESCRIPTIONS ============
+  // ============================================
+  // FILTERED PRESCRIPTIONS (TUZATILGAN - DISTRICT VA PRODUCT GROUP QO'SHILDI)
+  // ============================================
   const getFilteredPrescriptions = () => {
-    let filtered = prescriptions;
+    let filtered = [...prescriptions];
     
+    console.log('🔍 FILTR BOSHLANDI');
+    console.log('📋 Barcha retseptlar:', filtered.length);
+    console.log('👤 User role:', user?.role);
+    console.log('👤 User ID:', user?.uid);
+    console.log('👥 Subordinates:', user?.subordinates);
+    
+    // ===== 1. USER DISTRICTS BO'YICHA FILTR =====
+    const userDistricts = getUserDistricts();
+    console.log('📍 User districts:', userDistricts);
+    
+    if (userDistricts.length > 0 && user?.role !== 'superadmin' && user?.role !== 'seo' && user?.role !== 'admin') {
+      const beforeFilter = filtered.length;
+      filtered = filtered.filter(p => {
+        const pDistrict = p.doctorDistrict || p.doctorDistrictId || '';
+        const match = userDistricts.some(d => 
+          d === pDistrict || 
+          d === p.doctorDistrictId ||
+          pDistrict.includes(d) ||
+          d.includes(pDistrict)
+        );
+        if (!match) {
+          console.log(`❌ District filtr: ${p.receiptNumber} (doctorDistrict: ${p.doctorDistrict}) - mos emas`);
+        }
+        return match;
+      });
+      console.log(`📍 District filtr: ${beforeFilter} → ${filtered.length}`);
+    }
+    
+    // ===== 2. USER PRODUCT GROUPS BO'YICHA FILTR =====
+    const userProductGroups = getUserProductGroups();
+    console.log('💊 User product groups:', userProductGroups);
+    
+    if (userProductGroups.length > 0 && user?.role !== 'superadmin' && user?.role !== 'seo' && user?.role !== 'admin') {
+      const beforeFilter = filtered.length;
+      filtered = filtered.filter(p => {
+        const pGroup = p.productGroupId || p.productGroupName || '';
+        const match = userProductGroups.some(g => 
+          g === pGroup || 
+          g === p.productGroupId ||
+          pGroup.includes(g) ||
+          g.includes(pGroup)
+        );
+        if (!match) {
+          console.log(`❌ Product group filtr: ${p.receiptNumber} (productGroupId: ${p.productGroupId}) - mos emas`);
+        }
+        return match;
+      });
+      console.log(`💊 Product group filtr: ${beforeFilter} → ${filtered.length}`);
+    }
+    
+    // ===== 3. OY BO'YICHA FILTR =====
     if (selectedMonth) {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(p => {
         const month = p.month || new Date(p.printedAt?.toDate?.() || p.printedAt).toISOString().slice(0, 7);
         return month === selectedMonth;
       });
+      console.log(`📅 Oy filtr: ${beforeFilter} → ${filtered.length}`);
     }
     
+    // ===== 4. DOCTOR BO'YICHA FILTR =====
     if (selectedDoctor !== 'all') {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(p => p.doctorId === selectedDoctor);
+      console.log(`👨‍⚕️ Doctor filtr: ${beforeFilter} → ${filtered.length}`);
     }
     
+    // ===== 5. SPECIALITY BO'YICHA FILTR =====
     if (selectedSpeciality !== 'all') {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(p => p.doctorSpeciality === selectedSpeciality);
+      console.log(`📋 Speciality filtr: ${beforeFilter} → ${filtered.length}`);
     }
     
-    if (searchTerm) {
-      filtered = filtered.filter(p =>
-        p.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.drugName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    // ===== 6. DISTRICT FILTR (QO'SHIMCHA) =====
+    if (filterDistrict) {
+      const beforeFilter = filtered.length;
+      filtered = filtered.filter(p => 
+        p.doctorDistrict === filterDistrict || 
+        p.doctorDistrictId === filterDistrict
       );
+      console.log(`📍 District (qo\'shimcha) filtr: ${beforeFilter} → ${filtered.length}`);
     }
     
+    // ===== 7. PRODUCT GROUP FILTR (QO'SHIMCHA) =====
+    if (filterProductGroup) {
+      const beforeFilter = filtered.length;
+      filtered = filtered.filter(p => 
+        p.productGroupId === filterProductGroup || 
+        p.productGroupName === filterProductGroup
+      );
+      console.log(`💊 Product group (qo\'shimcha) filtr: ${beforeFilter} → ${filtered.length}`);
+    }
+    
+    // ===== 8. QIDIRUV BO'YICHA FILTR =====
+    if (searchTerm) {
+      const beforeFilter = filtered.length;
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.doctorName?.toLowerCase().includes(term) ||
+        p.drugName?.toLowerCase().includes(term) ||
+        p.receiptNumber?.toLowerCase().includes(term) ||
+        p.patientName?.toLowerCase().includes(term) ||
+        p.doctorDistrict?.toLowerCase().includes(term)
+      );
+      console.log(`🔍 Qidiruv filtr: ${beforeFilter} → ${filtered.length}`);
+    }
+    
+    console.log('✅ Filtr natijasi:', filtered.length);
     return filtered;
   };
 
@@ -643,9 +874,32 @@ const Prescriptions: React.FC = () => {
     return <div style={{ padding: '40px', textAlign: 'center' }}>⏳ Yuklanmoqda...</div>;
   }
 
+  const userDistricts = getUserDistricts();
+  const userProductGroups = getUserProductGroups();
+
   return (
     <div style={{ padding: '20px' }}>
-      <h2 style={{ marginBottom: '20px' }}>📋 Retseptlar</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+        <h2 style={{ margin: 0 }}>📋 Retseptlar ({filteredPrescriptions.length})</h2>
+        
+        {/* USER MA'LUMOTLARI */}
+        <div style={{ 
+          fontSize: '13px', 
+          color: '#666', 
+          background: '#f8f9fa', 
+          padding: '6px 14px', 
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <span>📍 {userDistricts.length} ta tuman</span>
+          <span>💊 {userProductGroups.length} ta guruh</span>
+          {user?.role === 'mp' && <span>👤 MP</span>}
+          {(user?.role === 'rm' || user?.role === 'ffm') && <span>👥 {user.subordinates?.length || 0} ta MP</span>}
+        </div>
+      </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '2px solid #ddd', marginBottom: '20px', gap: '4px', flexWrap: 'wrap' }}>
@@ -758,7 +1012,14 @@ const Prescriptions: React.FC = () => {
       {/* 2-BO'LIM: RETSEPTLAR RO'YXATI */}
       {activeTab === 'list' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '15px', 
+            flexWrap: 'wrap', 
+            gap: '10px' 
+          }}>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <input
                 type="text"
@@ -767,12 +1028,14 @@ const Prescriptions: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', width: '180px' }}
               />
+              
               <input
                 type="month"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
               />
+              
               <select
                 value={selectedDoctor}
                 onChange={(e) => setSelectedDoctor(e.target.value)}
@@ -784,10 +1047,61 @@ const Prescriptions: React.FC = () => {
                   return <option key={id} value={id}>{p?.doctorName || id}</option>;
                 })}
               </select>
+              
+              {/* ===== DISTRICT FILTER (QO'SHIMCHA) ===== */}
+              <select
+                value={filterDistrict}
+                onChange={(e) => setFilterDistrict(e.target.value)}
+                style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">📍 Barcha tumanlar</option>
+                {availableDistricts.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              
+              {/* ===== PRODUCT GROUP FILTER (QO'SHIMCHA) ===== */}
+              <select
+                value={filterProductGroup}
+                onChange={(e) => setFilterProductGroup(e.target.value)}
+                style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px' }}
+              >
+                <option value="">💊 Barcha guruhlar</option>
+                {availableProductGroups.map(g => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+              
+              {/* Filtrlarni tozalash */}
+              {(filterDistrict || filterProductGroup || searchTerm || selectedDoctor !== 'all' || selectedSpeciality !== 'all') && (
+                <button
+                  onClick={() => {
+                    setFilterDistrict('');
+                    setFilterProductGroup('');
+                    setSearchTerm('');
+                    setSelectedDoctor('all');
+                    setSelectedSpeciality('all');
+                  }}
+                  style={{ 
+                    padding: '8px 16px', 
+                    background: '#dc3545', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: '8px', 
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  ✕ Tozalash
+                </button>
+              )}
             </div>
-            <button onClick={handleExportList} style={{ padding: '8px 16px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
-              📤 Eksport
-            </button>
+            
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={handleExportList} style={{ padding: '8px 16px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                📤 Eksport
+              </button>
+            </div>
           </div>
 
           <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
@@ -798,6 +1112,7 @@ const Prescriptions: React.FC = () => {
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>№</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Vrach</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Preparat</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left' }}>Guruh</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Viloyat</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Tuman</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Retsept №</th>
@@ -808,7 +1123,7 @@ const Prescriptions: React.FC = () => {
                 </thead>
                 <tbody>
                   {filteredPrescriptions.length === 0 ? (
-                    <tr><td colSpan={9} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>📭 Hech qanday retsept topilmadi</td></tr>
+                    <tr><td colSpan={10} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>📭 Hech qanday retsept topilmadi</td></tr>
                   ) : (
                     filteredPrescriptions.map(function(p, index) {
                       var printStatus = p.printStatus || 'pending';
@@ -824,6 +1139,7 @@ const Prescriptions: React.FC = () => {
                           <td style={{ padding: '10px 14px' }}>{index + 1}</td>
                           <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{p.doctorName}</td>
                           <td style={{ padding: '10px 14px' }}>{p.drugName}</td>
+                          <td style={{ padding: '10px 14px' }}>{p.productGroupName || '-'}</td>
                           <td style={{ padding: '10px 14px' }}>{p.doctorRegion || '-'}</td>
                           <td style={{ padding: '10px 14px' }}>{p.doctorDistrict || '-'}</td>
                           <td style={{ padding: '10px 14px', fontFamily: 'monospace' }}>{p.receiptNumber}</td>
@@ -890,6 +1206,7 @@ const Prescriptions: React.FC = () => {
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              {/* Chap tomon: Sozlamalar */}
               <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>📝 Shablon nomi</label>
