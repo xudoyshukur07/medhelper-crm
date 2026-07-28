@@ -510,7 +510,7 @@ const Prescriptions: React.FC = () => {
     setEditingTemplate({ ...editingTemplate!, customFields: fields });
   };
 
-  // ============ GENERATE PREVIEW (TUZATILGAN) ============
+  // ============ GENERATE PREVIEW ============
   const generatePreview = () => {
     if (!editingTemplate) return;
     const t = editingTemplate;
@@ -527,116 +527,71 @@ const Prescriptions: React.FC = () => {
 
     let preview = '';
     
-    // Header
     if (t.showHeader !== false) {
       preview += '🏥 ' + (t.header || 'MedHelper') + '\n';
     }
-    
-    // Sub-header
     if (t.showSubHeader !== false) {
       preview += (t.subHeader || 'Электрон рецепт тизими') + '\n\n';
     }
-    
-    // Title
     if (t.showTitle !== false) {
       preview += (t.title || 'Оддий Электрон Рецепт') + '\n';
     }
-    
-    // Receipt number
     if (t.showReceiptNumber !== false) {
       preview += 'Рецепт №: RX20260708105841\n';
     }
-    
-    // Date
     if (t.showDate !== false) {
       preview += 'Сана: ' + new Date().toLocaleString('uz-UZ') + '\n';
     }
-    
-    // Patient
     if (t.showPatient !== false) {
       preview += '👤 Бемор: Алимов Али\n';
     }
-    
     preview += '─────────────────────\n';
-    
-    // Drug name
     if (t.showDrugName !== false) {
       preview += '💊 Препарат: ' + sampleProduct.name + '\n';
     }
-    
-    // Drug composition
     if (t.showDrugTarkibi !== false) {
       preview += '   таркиби: ' + sampleProduct.composition + '\n';
     }
-    
-    // Drug dosage
     if (t.showDrugDoza !== false) {
       preview += '   ⚡ Дозаси: ' + sampleProduct.dosage + '\n';
     }
-    
-    // Drug quantity
     if (t.showDrugMiqdori !== false) {
       preview += '   📦 Миқдори: ' + sampleProduct.packaging + '\n';
     }
-    
-    // Drug usage
     if (t.showDrugQabul !== false) {
       preview += '   🕐 Қабул: ' + sampleProduct.usage + '\n';
     }
-    
-    // Drug description
     if (t.showDrugIzoh !== false) {
       preview += '   📝 Изоҳ: ' + sampleProduct.description + '\n';
     }
-    
-    // Product price
     if (t.showProductPrice !== false) {
       preview += '   💰 Нархи: ' + sampleProduct.price.toLocaleString() + ' сўм\n';
     }
-    
-    // Product packaging
     if (t.showProductPackaging !== false) {
       preview += '   📦 Қадоқ: ' + sampleProduct.packaging + '\n';
     }
-    
-    // Product barcode
     if (t.showProductBarcode !== false) {
       preview += '   🔢 Штрих код: ' + sampleProduct.barcode + '\n';
     }
-    
     preview += '─────────────────────\n';
-    
-    // Status
     if (t.showStatus !== false) {
       preview += '✅ Ҳолат: Фаол\n';
     }
-    
-    // Muddat
     if (t.showMuddat !== false) {
       preview += 'Муддат: 30 кун\n';
     }
-    
-    // Doctor
     if (t.showDoctor !== false) {
       preview += '👨‍⚕️ Шифокор: Доктор Тестов\n';
     }
-    
-    // Doctor phone
     if (t.showDoctorPhone !== false) {
       preview += '📞 Телефон: +998 90 123 45 67\n';
     }
-    
-    // Doctor region
     if (t.showDoctorRegion !== false) {
       preview += '📍 Манзил: Тошкент, Чилонзор\n';
     }
-    
-    // Custom fields
     (t.customFields || []).forEach(function(field) {
       preview += field.label + ': ' + field.value + '\n';
     });
-    
-    // Footer
     if (t.showFooter !== false) {
       preview += '\n' + (t.footer || '* Бу рецепт фақат БАД учун *');
     }
@@ -669,7 +624,8 @@ const Prescriptions: React.FC = () => {
       'Telefon': p.doctorPhone,
       'Preparat': p.drugName,
       'Guruh': p.productGroupName || '-',
-      'Narxi': p.productPrice || 0,
+      'Viloyat': p.doctorRegion || '-',
+      'Tuman': p.doctorDistrict || '-',
       'Retsept №': p.receiptNumber,
       'Sana': new Date(p.printedAt?.toDate?.() || p.printedAt).toLocaleString('uz-UZ'),
       'Holat': p.status,
@@ -842,6 +798,8 @@ const Prescriptions: React.FC = () => {
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>№</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Vrach</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Preparat</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left' }}>Viloyat</th>
+                    <th style={{ padding: '10px 14px', textAlign: 'left' }}>Tuman</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Retsept №</th>
                     <th style={{ padding: '10px 14px', textAlign: 'left' }}>Sana</th>
                     <th style={{ padding: '10px 14px', textAlign: 'center' }}>Chop holati</th>
@@ -850,7 +808,7 @@ const Prescriptions: React.FC = () => {
                 </thead>
                 <tbody>
                   {filteredPrescriptions.length === 0 ? (
-                    <tr><td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>📭 Hech qanday retsept topilmadi</td></tr>
+                    <tr><td colSpan={9} style={{ padding: '30px', textAlign: 'center', color: '#999' }}>📭 Hech qanday retsept topilmadi</td></tr>
                   ) : (
                     filteredPrescriptions.map(function(p, index) {
                       var printStatus = p.printStatus || 'pending';
@@ -866,6 +824,8 @@ const Prescriptions: React.FC = () => {
                           <td style={{ padding: '10px 14px' }}>{index + 1}</td>
                           <td style={{ padding: '10px 14px', fontWeight: 'bold' }}>{p.doctorName}</td>
                           <td style={{ padding: '10px 14px' }}>{p.drugName}</td>
+                          <td style={{ padding: '10px 14px' }}>{p.doctorRegion || '-'}</td>
+                          <td style={{ padding: '10px 14px' }}>{p.doctorDistrict || '-'}</td>
                           <td style={{ padding: '10px 14px', fontFamily: 'monospace' }}>{p.receiptNumber}</td>
                           <td style={{ padding: '10px 14px' }}>
                             {new Date(p.printedAt?.toDate?.() || p.printedAt).toLocaleDateString('uz-UZ')}
@@ -930,7 +890,6 @@ const Prescriptions: React.FC = () => {
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              {/* Chap tomon: Sozlamalar */}
               <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 <div style={{ marginBottom: '15px' }}>
                   <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>📝 Shablon nomi</label>
@@ -1107,7 +1066,7 @@ const Prescriptions: React.FC = () => {
                 </div>
               </div>
 
-              {/* O'ng tomon: Preview */}
+              {/* Preview */}
               <div>
                 <h4 style={{ margin: '0 0 10px 0', color: '#666' }}>👁️ Preview</h4>
                 <div style={{
@@ -1240,13 +1199,11 @@ const Prescriptions: React.FC = () => {
             </h3>
             
             <form onSubmit={handleSavePrescription}>
-              {/* Doctor selection */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>👨‍⚕️ Vrach *</label>
                 <select
                   value={formData.doctorId}
                   onChange={(e) => {
-                    // Assuming doctors list is available
                     const doctor = { id: e.target.value, name: 'Doctor', phone: '', region: '', district: '', speciality: '' };
                     setFormData({
                       ...formData,
@@ -1261,11 +1218,9 @@ const Prescriptions: React.FC = () => {
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                 >
                   <option value="">Vrach tanlang</option>
-                  {/* Add doctors options here */}
                 </select>
               </div>
 
-              {/* Product selection */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>💊 Preparat *</label>
                 <select
@@ -1280,7 +1235,6 @@ const Prescriptions: React.FC = () => {
                 </select>
               </div>
 
-              {/* Product info display */}
               {formData.productId && (
                 <div style={{ background: '#f8f9fa', padding: '12px', borderRadius: '8px', marginBottom: '12px' }}>
                   <div style={{ fontSize: '12px', color: '#888' }}>
@@ -1294,7 +1248,6 @@ const Prescriptions: React.FC = () => {
                 </div>
               )}
 
-              {/* Patient info */}
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>👤 Bemor ismi</label>
                 <input
@@ -1349,4 +1302,3 @@ const Prescriptions: React.FC = () => {
 };
 
 export default Prescriptions;
-

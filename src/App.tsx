@@ -1,6 +1,7 @@
 ﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import Layout from './components/layout/Layout';
+// import Layout from './components/layout/Layout'; // Eski Layout
+import MobileLayout from './components/layout/MobileLayout'; // Yangi MobileLayout
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Doctors from './pages/Doctors';
@@ -20,6 +21,7 @@ import TelegramBot from './pages/TelegramBot';
 import Templates from './pages/Templates';
 import PrivateRoute from './components/common/PrivateRoute';
 import './App.css';
+import Roles from './pages/Roles';
 
 function App() {
   return (
@@ -27,7 +29,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+          <Route path="/" element={<PrivateRoute><MobileLayout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="doctors" element={<Doctors />} />
@@ -45,6 +47,7 @@ function App() {
             <Route path="users" element={<Users />} />
             <Route path="telegram" element={<TelegramBot />} />
             <Route path="templates" element={<Templates />} />
+            <Route path="/roles" element={<Roles />} />
           </Route>
         </Routes>
       </BrowserRouter>
@@ -53,4 +56,3 @@ function App() {
 }
 
 export default App;
-

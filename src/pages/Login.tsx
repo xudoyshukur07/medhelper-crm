@@ -38,7 +38,7 @@ const Login: React.FC = () => {
           {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>{error}</div>}
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="admin@medhelper.uz" style={{ width: '100%', padding: '10px', border: '1px solid #e8ecf1', borderRadius: '8px' }} />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="admin" style={{ width: '100%', padding: '10px', border: '1px solid #e8ecf1', borderRadius: '8px' }} />
           </div>
           <div style={{ marginBottom: '15px' }}>
             <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px' }}>Пароль</label>
@@ -48,7 +48,7 @@ const Login: React.FC = () => {
             {loading ? 'Кирилмоқда...' : 'Кириш'}
           </button>
           <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '13px', color: '#666', padding: '8px', background: '#f8f9fa', borderRadius: '4px' }}>
-            👤 admin@medhelper.uz / admin123
+            👤Мурожат учун.@tezsiribot
           </div>
         </form>
       </div>
